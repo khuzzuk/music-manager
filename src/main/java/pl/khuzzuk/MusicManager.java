@@ -8,12 +8,12 @@ import pl.khuzzuk.ui.MainWindow;
 import javax.swing.SwingUtilities;
 import java.io.IOException;
 
-public class Main {
+public class MusicManager {
     public static SettingsService settingsService;
 
     static void main() {
-        SwingUtilities.invokeLater(Main::initComponents);
-        SwingUtilities.invokeLater(Main::showMainWindow);
+        SwingUtilities.invokeLater(MusicManager::initComponents);
+        SwingUtilities.invokeLater(MusicManager::showMainWindow);
     }
 
     private static void initComponents() {
