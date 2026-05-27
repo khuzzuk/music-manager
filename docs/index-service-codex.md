@@ -8,6 +8,8 @@ implementations, error handling, and change contracts.
 
 - `src/main/java/pl/khuzzuk/index/IndexService.java` - builds an `IndexItem` tree
   from one or more filesystem paths and writes the result to `index.dat`.
+- `src/main/java/pl/khuzzuk/index/IndexReaderService.java` - reads `index.dat`
+  and reconstructs a `RootIndexItem` tree.
 - `index.dat` - generated index output written by `IndexService.index(...)`.
 - `src/main/java/pl/khuzzuk/index/IndexItem.java` - common tree node interface.
 - `src/main/java/pl/khuzzuk/index/RootIndexItem.java` - virtual root node named
@@ -19,14 +21,17 @@ implementations, error handling, and change contracts.
   path cannot be read.
 - `src/test/java/pl/khuzzuk/index/IndexServiceTest.java` - focused tests for tree
   building, parent links, ordering, and `index.dat` output.
+- `src/test/java/pl/khuzzuk/index/IndexReaderServiceTest.java` - focused tests for
+  parsing `index.dat`, unescaping names, and writer/reader round-trip behavior.
 
 ## Service Role
 
 `IndexService` scans filesystem paths, returns a tree of `IndexItem` nodes under a
-virtual `RootIndexItem`, and writes the resulting tree to `index.dat`. It is
-responsible for filesystem traversal and index persistence only. It does not
-currently filter by audio extension, read audio metadata, build Swing tree nodes,
-or connect the index to the player.
+virtual `RootIndexItem`, and writes the resulting tree to `index.dat`.
+`IndexReaderService` reads `index.dat` back into the same tree model. The indexing
+package is responsible for filesystem traversal and index persistence only. It
+does not currently filter by audio extension, read audio metadata, build Swing tree
+nodes, or connect the index to the player.
 
 The current implementation treats every non-directory path as a
 `SoundFileIndexItem`.
@@ -36,13 +41,11 @@ The current implementation treats every non-directory path as a
 ### Constructors
 
 ```java
-public IndexService()
 public IndexService(Path indexPath)
 ```
 
-The no-arg constructor writes to `index.dat` in the process working directory. The
-`Path` constructor injects the output file location and is used by tests to avoid
-writing a project-local runtime file.
+The `Path` constructor injects the output file location and is used by tests to
+avoid writing a project-local runtime file.
 
 ### index(RootIndexItem, List<Path>)
 
@@ -120,20 +123,47 @@ After the tree is built, `saveIndex(IndexItem root)` writes the configured index
 path in UTF-8.
 The current format is one line per persisted item, in pre-order traversal order.
 Directories are marked with a compact `D|` prefix, while sound files are written
-as bare escaped names:
+as bare escaped names. Empty lines are structural: the leading empty line appears
+before root, and each later empty line closes the current directory on the reader's
+stack.
 
 ```text
+
+D|root
 D|escaped-directory-name
 escaped-file-name
+
 ```
 
 `RootIndexItem` is persisted like a directory as `D|root`, with one empty line
-before the root line. The file does not include an explicit depth value; consumers
-should derive relationships from item order. `UnreadableIndexItem` nodes are
-temporary in-memory nodes and are not written to `index.dat`. There is no
+before the root line. The file does not include an explicit depth value; hierarchy
+is derived from entry order and directory-closing empty lines. `UnreadableIndexItem`
+nodes are temporary in-memory nodes and are not written to `index.dat`. There is no
 `UNKNOWN` marker in the persisted format; any future non-directory `IndexItem`
 implementation that is not `UnreadableIndexItem` would currently be written as a
 bare escaped name. Names escape backslash, carriage return, newline, and `|`.
+
+### IndexReaderService
+
+```java
+public IndexReaderService()
+public IndexReaderService(Path indexPath)
+public RootIndexItem read() throws IOException
+```
+
+The no-arg constructor reads `index.dat` from the process working directory. The
+`Path` constructor injects the input file location. `read()` reads UTF-8 lines,
+ignores leading empty lines before root, expects the first non-empty entry to be
+`D|root`, and reconstructs the tree with parent links.
+
+Reader parsing rules:
+
+- `D|name` creates a directory node and pushes it onto the current directory stack;
+- the first `D|root` creates the returned `RootIndexItem`;
+- a bare escaped line creates a `SoundFileIndexItem` under the current directory;
+- an empty line pops one directory from the stack;
+- a bare file line without a current directory, a non-root first directory, or an
+  invalid trailing escape throws `IOException`.
 
 ## IndexItem Contract
 
@@ -284,8 +314,6 @@ When changing this area, keep these rules:
   sound files.
 - `DirectoryIndexItem.getChildren()` exposes a mutable list.
 - `UnreadableIndexItem` does not store the exception or reason why reading failed.
-- `IndexService.getPersistentType(IndexItem)` remains in the class but is not used
-  by the current save path.
 - Symbolic links are not handled specially. `Files.isDirectory(path)` follows links
   by default, so linked directory cycles may be a risk if such paths are scanned.
 - Missing or non-directory public root paths are outside the current API contract
@@ -295,7 +323,8 @@ When changing this area, keep these rules:
 
 Existing focused tests in `IndexServiceTest` cover:
 
-- writing root as `D|root` with a leading empty line;
+- writing root as `D|root` with a leading empty line and directory-closing empty
+  lines;
 - writing directories with `D|` and files as bare escaped names;
 - not writing explicit depth values;
 - case-insensitive sorting of root paths and children;
@@ -305,6 +334,13 @@ Existing focused tests in `IndexServiceTest` cover:
 - avoiding duplicate root directory nodes while merging;
 - preserving parent links;
 - `hasChildren()` behavior for root, directories, and files.
+
+Existing focused tests in `IndexReaderServiceTest` cover:
+
+- reading `index.dat` into a `RootIndexItem` tree with directory siblings;
+- restoring parent links while reading;
+- unescaping names;
+- reading a tree written by `IndexService`.
 
 Additional useful tests:
 
@@ -325,8 +361,8 @@ Paste this block when Codex needs to work on indexing:
 
 ```text
 The Music Manager project has `pl.khuzzuk.index.IndexService`.
-`IndexService` has a no-arg constructor that writes to `index.dat` and a
-`IndexService(Path indexPath)` constructor for injecting the output file.
+`IndexService` has an `IndexService(Path indexPath)` constructor for injecting the
+output file.
 `IndexService.index(RootIndexItem, List<Path>)` is the public indexing entry point.
 Callers must create and pass the `RootIndexItem`; the service mutates and returns
 that supplied root, synchronizing it with current filesystem entries by adding
@@ -344,7 +380,13 @@ not present in the current root paths or scanned directory listings are removed.
 After building the tree, IndexService writes `index.dat` as UTF-8 text lines
 without explicit depth. Directories, including root, are written as
 `D|escaped-name`; sound files are written as bare escaped names. Root is written as
-`D|root` and is preceded by one empty line. Unreadable nodes are not persisted.
+`D|root` and is preceded by one empty line. Empty lines after directory contents
+close the current directory for the reader. Unreadable nodes are not persisted.
+
+`IndexReaderService` has a no-arg constructor for `index.dat`, a
+`IndexReaderService(Path indexPath)` constructor, and `read() throws IOException`.
+It reads `D|...` directory lines, bare sound-file lines, and empty-line directory
+closures into a `RootIndexItem` tree with parent links.
 
 Node interface:
 IndexItem has isDirectory(), getName(), getChildren(), hasChildren(), getParent(),

@@ -16,8 +16,6 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class IndexServiceTest {
-    private static final String SEPARATOR = System.lineSeparator();
-
     @TempDir
     private Path tempDir;
 
@@ -29,9 +27,9 @@ class IndexServiceTest {
         new IndexService(indexPath).index(new RootIndexItem(), List.of(music));
 
         assertEquals(
-                SEPARATOR
-                        + "D|root" + SEPARATOR
-                        + "D|music" + SEPARATOR,
+                IndexItem.LINE_SEPARATOR
+                        + IndexItem.DIRECTORY_PREFIX + IndexItem.ROOT_NAME + IndexItem.LINE_SEPARATOR
+                        + IndexItem.DIRECTORY_PREFIX + "music" + IndexItem.LINE_SEPARATOR,
                 Files.readString(indexPath));
     }
 
@@ -45,11 +43,11 @@ class IndexServiceTest {
         new IndexService(indexPath).index(new RootIndexItem(), List.of(music));
 
         assertEquals(
-                SEPARATOR
-                        + "D|root" + SEPARATOR
-                        + "D|music" + SEPARATOR
-                        + "D|album" + SEPARATOR
-                        + "song.mp3" + SEPARATOR,
+                IndexItem.LINE_SEPARATOR
+                        + IndexItem.DIRECTORY_PREFIX + IndexItem.ROOT_NAME + IndexItem.LINE_SEPARATOR
+                        + IndexItem.DIRECTORY_PREFIX + "music" + IndexItem.LINE_SEPARATOR
+                        + IndexItem.DIRECTORY_PREFIX + "album" + IndexItem.LINE_SEPARATOR
+                        + "song.mp3" + IndexItem.LINE_SEPARATOR,
                 Files.readString(indexPath));
     }
 

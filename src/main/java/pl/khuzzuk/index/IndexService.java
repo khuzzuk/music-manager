@@ -140,7 +140,7 @@ public class IndexService {
         }
 
         if (item.isRoot() || item instanceof DirectoryIndexItem) {
-            index.append("D|");
+            index.append(IndexItem.DIRECTORY_PREFIX);
         }
 
         index.append(escape(item.getName())).append(System.lineSeparator());

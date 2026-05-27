@@ -3,6 +3,10 @@ package pl.khuzzuk.index;
 import java.util.List;
 
 public interface IndexItem {
+    String DIRECTORY_PREFIX = "D|";
+    String LINE_SEPARATOR = System.lineSeparator();
+    String ROOT_NAME = "root";
+
     boolean isDirectory();
 
     String getName();

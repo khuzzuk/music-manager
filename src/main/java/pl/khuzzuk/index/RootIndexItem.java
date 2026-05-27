@@ -13,7 +13,7 @@ public class RootIndexItem implements IndexItem {
 
     @Override
     public String getName() {
-        return "root";
+        return IndexItem.ROOT_NAME;
     }
 
     @Override
