@@ -149,12 +149,15 @@ carriage return, newline, and `|`.
 ```java
 public IndexReaderService(Path indexPath)
 public RootIndexItem read() throws IOException
+public RootIndexItem getCurrentRootIndexItem()
 ```
 
 The `Path` constructor injects the input file location. `read()` reads UTF-8
-lines, ignores empty lines, expects the first non-empty entry to be `D|root`, and
+lines, ignores empty lines, expects the first non-empty entry to be `D|root`,
 reconstructs the tree with parent links by matching each item path to a persisted
-directory parent path.
+directory parent path, stores the reconstructed root as the current root, and
+returns it. `getCurrentRootIndexItem()` returns the most recently read root, or an
+empty `RootIndexItem` before the first successful read.
 
 Reader parsing rules:
 

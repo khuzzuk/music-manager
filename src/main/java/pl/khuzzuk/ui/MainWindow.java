@@ -1,5 +1,7 @@
 package pl.khuzzuk.ui;
 
+import pl.khuzzuk.index.IndexReaderService;
+import pl.khuzzuk.index.IndexService;
 import pl.khuzzuk.settings.Settings;
 import pl.khuzzuk.settings.SettingsService;
 
@@ -9,7 +11,7 @@ import java.awt.BorderLayout;
 public class MainWindow extends JFrame {
     SettingsService settingsService;
 
-    public MainWindow(SettingsService settingsService) {
+    public MainWindow(SettingsService settingsService, IndexService indexService, IndexReaderService indexReaderService) {
         super("Music Manager");
         this.settingsService = settingsService;
 
@@ -22,7 +24,7 @@ public class MainWindow extends JFrame {
         PlayerPane playerPane = new PlayerPane();
         add(playerPane, BorderLayout.SOUTH);
 
-        MainMenuBar mainMenuBar = new MainMenuBar(settingsService);
+        MainMenuBar mainMenuBar = new MainMenuBar(settingsService, indexService, indexReaderService);
         setJMenuBar(mainMenuBar);
 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);

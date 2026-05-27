@@ -112,6 +112,31 @@ class IndexReaderServiceTest {
                 .toList());
     }
 
+    @Test
+    void readsEmptyIndexFileAsEmptyRoot() throws IOException {
+        Path indexPath = tempDir.resolve("index.dat");
+        Files.createFile(indexPath);
+
+        RootIndexItem root = new IndexReaderService(indexPath).read();
+
+        assertEquals(IndexItem.ROOT_NAME, root.getName());
+        assertNull(root.getParent());
+        assertEquals(List.of(), root.getChildren());
+    }
+
+    @Test
+    void exposesCurrentRootAfterRead() throws IOException {
+        Path indexPath = tempDir.resolve("index.dat");
+        Files.writeString(indexPath,
+                IndexItem.LINE_SEPARATOR
+                        + IndexItem.DIRECTORY_PREFIX + IndexItem.ROOT_NAME + IndexItem.LINE_SEPARATOR);
+        IndexReaderService indexReaderService = new IndexReaderService(indexPath);
+
+        RootIndexItem root = indexReaderService.read();
+
+        assertSame(root, indexReaderService.getCurrentRootIndexItem());
+    }
+
     private String escape(String value) {
         return value
                 .replace("\\", "\\\\")

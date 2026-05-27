@@ -1,5 +1,8 @@
 package pl.khuzzuk.ui;
 
+import pl.khuzzuk.index.IndexReaderService;
+import pl.khuzzuk.index.IndexService;
+import pl.khuzzuk.index.RootIndexItem;
 import pl.khuzzuk.settings.Settings;
 import pl.khuzzuk.settings.SettingsService;
 
@@ -21,10 +24,18 @@ import java.util.List;
 
 public class IndexDirectoriesDialog extends JDialog {
     private final SettingsService settingsService;
+    private final IndexService indexService;
+    private final IndexReaderService indexReaderService;
 
-    public IndexDirectoriesDialog(Window owner, SettingsService settingsService) {
+    public IndexDirectoriesDialog(
+            Window owner,
+            SettingsService settingsService,
+            IndexService indexService,
+            IndexReaderService indexReaderService) {
         super(owner, "Indeksowane katalogi");
         this.settingsService = settingsService;
+        this.indexService = indexService;
+        this.indexReaderService = indexReaderService;
         setSize(500, 300);
     }
 
@@ -87,11 +98,13 @@ public class IndexDirectoriesDialog extends JDialog {
 
             try {
                 settingsService.saveSettings(newSettings);
+                RootIndexItem root = indexReaderService.getCurrentRootIndexItem();
+                indexService.index(root, indexedPaths);
                 refresh();
             } catch (IOException e) {
                 JOptionPane.showMessageDialog(
                         this,
-                        "Nie udalo sie zapisac ustawien indeksowania.",
+                        "Nie udalo sie zapisac ustawien lub indeksu.",
                         "Blad zapisu",
                         JOptionPane.ERROR_MESSAGE);
             }

@@ -9,6 +9,7 @@ import java.util.Objects;
 
 public class IndexReaderService {
     private final Path indexPath;
+    private RootIndexItem currentRootIndexItem = new RootIndexItem();
 
     public IndexReaderService(Path indexPath) {
         this.indexPath = indexPath;
@@ -41,7 +42,12 @@ public class IndexReaderService {
             parent.getChildren().add(item);
         }
 
-        return root == null ? new RootIndexItem() : root;
+        currentRootIndexItem = root == null ? new RootIndexItem() : root;
+        return currentRootIndexItem;
+    }
+
+    public RootIndexItem getCurrentRootIndexItem() {
+        return currentRootIndexItem;
     }
 
     private IndexItem createDirectory(String value, RootIndexItem root) throws IOException {
