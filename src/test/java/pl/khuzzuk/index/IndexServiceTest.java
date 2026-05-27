@@ -197,6 +197,35 @@ class IndexServiceTest {
     }
 
     @Test
+    void removesSoundFileMissingFromDiskWhenMergingDirectory() throws IOException {
+        Path music = Files.createDirectory(tempDir.resolve("music"));
+        Path albumPath = Files.createDirectory(music.resolve("album"));
+        Files.createFile(albumPath.resolve("song1.mp3"));
+        Path indexPath = tempDir.resolve("index.dat");
+
+        RootIndexItem root = new RootIndexItem();
+        DirectoryIndexItem existingMusic = new DirectoryIndexItem("music");
+        existingMusic.setParent(root);
+        DirectoryIndexItem album = new DirectoryIndexItem("album");
+        album.setParent(existingMusic);
+        SoundFileIndexItem song1 = new SoundFileIndexItem("song1.mp3");
+        song1.setParent(album);
+        SoundFileIndexItem song2 = new SoundFileIndexItem("song2.mp3");
+        song2.setParent(album);
+        album.addChildren(List.of(song1, song2));
+        existingMusic.addChildren(List.of(album));
+        root.addChildren(List.of(existingMusic));
+
+        new IndexService(indexPath).index(root, List.of(music));
+
+        assertEquals(List.of("song1.mp3"), album.getChildren().stream()
+                .map(IndexItem::getName)
+                .toList());
+        assertSame(song1, album.getChildren().getFirst());
+        assertFalse(album.getChildren().contains(song2));
+    }
+
+    @Test
     void setsParentLinks() throws IOException {
         Path music = Files.createDirectory(tempDir.resolve("music"));
         Files.createFile(music.resolve("song.mp3"));
