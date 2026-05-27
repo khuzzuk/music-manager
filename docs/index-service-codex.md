@@ -44,33 +44,45 @@ The no-arg constructor writes to `index.dat` in the process working directory. T
 `Path` constructor injects the output file location and is used by tests to avoid
 writing a project-local runtime file.
 
-### index(List<Path>)
+### index(RootIndexItem, List<Path>)
 
 ```java
-public RootIndexItem index(List<Path> rootPaths) throws IOException
+public RootIndexItem index(RootIndexItem root, List<Path> rootPaths) throws IOException
 ```
 
-Builds an `IndexItem` tree under a virtual `RootIndexItem` and writes the generated
-tree to the configured index path.
+Synchronizes the supplied `RootIndexItem` with entries found under `rootPaths` and
+writes the merged tree to the configured index path.
+
+Hard API assumption: every path in `rootPaths` is a directory. The method documents
+this in Javadoc and does not try to support regular-file root paths as first-class
+inputs.
 
 Current behavior:
 
 - declares `throws IOException` for `index.dat` write failures;
-- creates a `RootIndexItem` named `root`;
+- mutates and returns the supplied `RootIndexItem`;
 - normalizes root paths with `toAbsolutePath().normalize()` for filtering;
 - removes any root path that is nested under another root path from the same input
   list;
 - sorts the remaining root paths by display name with
   `String.CASE_INSENSITIVE_ORDER`;
-- maps each path through private `buildItem(path, root)`;
-- adds every resulting item to the root's children;
+- removes existing root children that are not present in the current filtered
+  `rootPaths`;
+- maps each remaining root path through private `mergeDirectory(root, path)`;
+- reuses an existing directory node with the same name, compared
+  case-insensitively, when merging;
+- adds missing directory and file nodes, preserving parent links;
+- removes existing child nodes from each scanned directory when their names are no
+  longer present in the current filesystem listing for that directory;
+- sorts children after merging;
 - writes the tree to the configured index path;
 - returns the `RootIndexItem`.
 
 ## Internal Flow
 
-Before recursive scanning starts, `index(List<Path>)` filters redundant root paths
-inline in its stream pipeline. If the input contains both `C:\Music` and
+Before recursive scanning starts, `index(RootIndexItem, List<Path>)` filters
+redundant root paths inline in its stream pipeline. If the input contains both
+`C:\Music` and
 `C:\Music\Rock`, only `C:\Music` remains as a direct child of `RootIndexItem`;
 `Rock` can still appear inside the scanned tree under `Music`.
 
@@ -79,22 +91,27 @@ uses normalized absolute paths for comparison but keeps the original `Path` obje
 for scanning and display-name calculation. It does not call `toRealPath()`, so
 filtering does not require the path to exist or be readable.
 
-`buildItem(Path path, IndexItem parent)` is the recursive implementation for
-non-root nodes.
+`mergeDirectory(IndexItem parent, Path path)` is the recursive implementation for
+directory nodes. It either finds an existing `DirectoryIndexItem` with the same
+name under `parent` or creates one, then scans the filesystem directory,
+removes stale children, and adds missing children into the existing tree.
 
 Current flow:
 
-1. Runs the item-building logic inside one `try` block.
-2. Calls `Files.isDirectory(path)`.
-3. If the path is not a directory, creates `SoundFileIndexItem`, sets its parent,
-   and returns it.
-4. If the path is a directory, opens `Files.list(path)`.
-5. Creates `DirectoryIndexItem` and sets its parent.
-6. Sorts child paths by display name with `String.CASE_INSENSITIVE_ORDER`.
-7. Maps each child path through `buildItem(child, item)`.
-8. Adds the resulting child list to `DirectoryIndexItem`.
-9. If any `IOException` or `SecurityException` occurs during this flow, creates
-   `UnreadableIndexItem`, sets its parent, and returns it.
+1. Finds or creates a `DirectoryIndexItem` for the current directory name.
+2. Opens `Files.list(path)`.
+3. Sorts child paths by display name with `String.CASE_INSENSITIVE_ORDER`.
+4. Removes current child nodes whose names are not present in the listing.
+5. For each child, `mergeChild(...)` calls `Files.isDirectory(child)`.
+6. Directory children recurse through `mergeDirectory(...)`.
+7. Non-directory children create a `SoundFileIndexItem` only when a same-name
+   `SoundFileIndexItem` is not already present under the parent.
+8. After merging a directory, its children are sorted by
+   `IndexItem.getName()` with `String.CASE_INSENSITIVE_ORDER`.
+9. If a newly-created directory cannot be listed because of `IOException` or
+   `SecurityException`, the new directory node is replaced with an
+   `UnreadableIndexItem`. If an existing directory cannot be listed, the existing
+   tree node is kept as-is.
 
 `getName(Path)` uses `path.getFileName().toString()`. If `getFileName()` is `null`
 for a root path such as `C:\`, it falls back to `path.toString()`.
@@ -151,8 +168,8 @@ Behavior:
 - `getChildren()` returns the mutable backing `List<IndexItem>`;
 - `hasChildren()` returns `true` when the backing child list is not empty;
 - children are added by package-private `addChildren(List<IndexItem>)`;
-- all paths passed to `IndexService.index(List<Path>)` become direct children
-  of this root.
+- all non-nested paths passed to `IndexService.index(root, rootPaths)` become or
+  merge with direct children of this root.
 
 ### DirectoryIndexItem
 
@@ -211,15 +228,15 @@ unreadable.
 
 Current rules:
 
-- `buildItem(...)` does not throw `IOException`.
+- `mergeDirectory(...)` and `mergeChild(...)` do not throw `IOException`.
 - `index(...)` may throw `IOException` only when writing the configured index file
   fails.
-- `index(...)` returns `RootIndexItem` after successful tree build and file write.
+- `index(...)` returns `RootIndexItem` after successful tree merge and file write.
 - Any unreadable path becomes an `UnreadableIndexItem` leaf with
-  `isDirectory() == false`.
+  `isDirectory() == false` when it is encountered while creating a missing node.
 - A readable parent directory can still contain unreadable child nodes.
-- Missing paths and regular files are currently treated as non-directories and
-  become `SoundFileIndexItem`, unless an access check throws `SecurityException`.
+- The public `rootPaths` contract assumes directories; missing or regular-file
+  root paths are outside the supported API contract.
 - Nested root paths are filtered before scanning and do not become direct children
   of `RootIndexItem`.
 
@@ -238,6 +255,10 @@ When changing this area, keep these rules:
   document the ownership boundary between indexing and playback.
 - Preserve parent links unless the caller contract is explicitly changed. Direct
   children of `RootIndexItem` should use that root as their parent.
+- Preserve synchronization semantics for `index(RootIndexItem, List<Path>)`:
+  update the supplied tree, avoid duplicating existing same-name directories/files,
+  add missing nodes, and remove nodes that are no longer present on disk for the
+  scanned root paths/directories.
 - If `IndexItem` gains or loses methods such as `hasChildren()`, update every
   implementation and this document together.
 - Preserve explicit `isRoot()` semantics: only `RootIndexItem` should return
@@ -254,7 +275,8 @@ When changing this area, keep these rules:
 ## Known Risks And Weaknesses
 
 - There are tests for `index.dat` output shape, absence of explicit depth, root
-  and child ordering, nested-root filtering, parent links, and `hasChildren()`.
+  and child ordering, nested-root filtering, merge behavior, parent links, and
+  `hasChildren()`.
 - There are no tests for unreadable directory behavior because reliable permission
   manipulation is platform-dependent.
 - `RootIndexItem.getChildren()` exposes a mutable list.
@@ -266,8 +288,8 @@ When changing this area, keep these rules:
   by the current save path.
 - Symbolic links are not handled specially. `Files.isDirectory(path)` follows links
   by default, so linked directory cycles may be a risk if such paths are scanned.
-- Missing paths become `SoundFileIndexItem` because `Files.isDirectory(path)`
-  returns `false`.
+- Missing or non-directory public root paths are outside the current API contract
+  and are not covered by tests.
 
 ## Testing Guidance
 
@@ -278,14 +300,17 @@ Existing focused tests in `IndexServiceTest` cover:
 - not writing explicit depth values;
 - case-insensitive sorting of root paths and children;
 - filtering nested root paths;
+- merging missing children into an existing supplied root tree;
+- removing stale root or directory children that are no longer present on disk;
+- avoiding duplicate root directory nodes while merging;
 - preserving parent links;
 - `hasChildren()` behavior for root, directories, and files.
 
 Additional useful tests:
 
 - unreadable directory behavior where the platform allows permission manipulation;
-- non-directory root behavior;
-- missing path behavior;
+- unsupported non-directory root behavior if that contract changes;
+- missing root path behavior if that contract changes;
 - escaping special characters where the platform allows such file names.
 
 Run verification with:
@@ -302,14 +327,20 @@ Paste this block when Codex needs to work on indexing:
 The Music Manager project has `pl.khuzzuk.index.IndexService`.
 `IndexService` has a no-arg constructor that writes to `index.dat` and a
 `IndexService(Path indexPath)` constructor for injecting the output file.
-`IndexService.index(List<Path>)` returns a `RootIndexItem` and declares
-`throws IOException` for writing the configured index file.
+`IndexService.index(RootIndexItem, List<Path>)` is the public indexing entry point.
+Callers must create and pass the `RootIndexItem`; the service mutates and returns
+that supplied root, synchronizing it with current filesystem entries by adding
+missing nodes and removing stale nodes. It declares `throws IOException` for
+writing the configured index file. Public `rootPaths` are assumed to be
+directories.
 
-The returned root is a virtual `RootIndexItem` with name "root". Every path passed
-to `index(List<Path>)` is first compared with other input paths using
+The supplied root is a virtual `RootIndexItem` with name "root". Every path passed
+to `index(RootIndexItem, List<Path>)` is first compared with other input paths using
 `toAbsolutePath().normalize()`. If one input path is nested under another input
 path, the nested path is skipped as a direct root child. Remaining paths are sorted
-by display name, scanned with buildItem, and added as direct children of the root.
+by display name and merged with existing same-name directory nodes where possible.
+Missing directory and sound-file nodes are added with parent links; stale nodes
+not present in the current root paths or scanned directory listings are removed.
 After building the tree, IndexService writes `index.dat` as UTF-8 text lines
 without explicit depth. Directories, including root, are written as
 `D|escaped-name`; sound files are written as bare escaped names. Root is written as
@@ -327,14 +358,15 @@ Implementations:
 
 Traversal:
 IndexService recursively scans directories with Files.list(path), sorts children by
-display name using String.CASE_INSENSITIVE_ORDER, maps each child through buildItem,
-and assigns parent links. If listing a directory throws IOException or
-SecurityException, it returns UnreadableIndexItem instead of failing the whole tree.
+display name using String.CASE_INSENSITIVE_ORDER, merges same-name directories and
+files case-insensitively, adds missing nodes, and assigns parent links. If listing
+a newly-created directory throws IOException or SecurityException, it replaces that
+new node with UnreadableIndexItem instead of failing the whole tree.
 
 Current limitations:
-SoundFileIndexItem is used for every non-directory path, not only verified audio
-files. Missing paths also become SoundFileIndexItem. DirectoryIndexItem exposes a
-mutable children list. Symlink cycles are not handled specially.
+SoundFileIndexItem is used for every non-directory child path, not only verified
+audio files. Public root paths are assumed to be directories. DirectoryIndexItem
+exposes a mutable children list. Symlink cycles are not handled specially.
 
 When changing IndexItem, update RootIndexItem, DirectoryIndexItem,
 SoundFileIndexItem, and UnreadableIndexItem together.

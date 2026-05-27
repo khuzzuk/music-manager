@@ -26,7 +26,7 @@ class IndexServiceTest {
         Path music = Files.createDirectory(tempDir.resolve("music"));
         Path indexPath = tempDir.resolve("index.dat");
 
-        new IndexService(indexPath).index(List.of(music));
+        new IndexService(indexPath).index(new RootIndexItem(), List.of(music));
 
         assertEquals(
                 SEPARATOR
@@ -42,7 +42,7 @@ class IndexServiceTest {
         Files.createFile(album.resolve("song.mp3"));
         Path indexPath = tempDir.resolve("index.dat");
 
-        new IndexService(indexPath).index(List.of(music));
+        new IndexService(indexPath).index(new RootIndexItem(), List.of(music));
 
         assertEquals(
                 SEPARATOR
@@ -62,7 +62,8 @@ class IndexServiceTest {
         Files.createFile(secondRoot.resolve("delta.mp3"));
         Path indexPath = tempDir.resolve("index.dat");
 
-        RootIndexItem root = new IndexService(indexPath).index(List.of(secondRoot, firstRoot));
+        RootIndexItem root = new RootIndexItem();
+        new IndexService(indexPath).index(root, List.of(secondRoot, firstRoot));
 
         assertEquals(List.of("Alpha", "bravo"), root.getChildren().stream()
                 .map(IndexItem::getName)
@@ -79,11 +80,120 @@ class IndexServiceTest {
         Files.createFile(album.resolve("song.mp3"));
         Path indexPath = tempDir.resolve("index.dat");
 
-        RootIndexItem root = new IndexService(indexPath).index(List.of(album, music));
+        RootIndexItem root = new RootIndexItem();
+        new IndexService(indexPath).index(root, List.of(album, music));
 
         assertEquals(1, root.getChildren().size());
         assertEquals("music", root.getChildren().getFirst().getName());
         assertEquals("album", root.getChildren().getFirst().getChildren().getFirst().getName());
+    }
+
+    @Test
+    void mergesMissingItemsIntoExistingRoot() throws IOException {
+        Path music = Files.createDirectory(tempDir.resolve("music"));
+        Path albumPath = Files.createDirectory(music.resolve("album"));
+        Files.createFile(albumPath.resolve("existing.mp3"));
+        Files.createFile(albumPath.resolve("new.mp3"));
+        Path indexPath = tempDir.resolve("index.dat");
+
+        RootIndexItem root = new RootIndexItem();
+        DirectoryIndexItem existingMusic = new DirectoryIndexItem("music");
+        existingMusic.setParent(root);
+        DirectoryIndexItem existingAlbum = new DirectoryIndexItem("album");
+        existingAlbum.setParent(existingMusic);
+        SoundFileIndexItem existingFile = new SoundFileIndexItem("existing.mp3");
+        existingFile.setParent(existingAlbum);
+        existingAlbum.addChildren(List.of(existingFile));
+        existingMusic.addChildren(List.of(existingAlbum));
+        root.addChildren(List.of(existingMusic));
+
+        RootIndexItem indexedRoot = new IndexService(indexPath).index(root, List.of(music));
+
+        assertSame(root, indexedRoot);
+        assertEquals(1, root.getChildren().size());
+        assertSame(existingMusic, root.getChildren().getFirst());
+        assertSame(existingAlbum, root.getChildren().getFirst().getChildren().getFirst());
+        assertEquals(List.of("existing.mp3", "new.mp3"), existingAlbum.getChildren().stream()
+                .map(IndexItem::getName)
+                .toList());
+        assertSame(existingFile, existingAlbum.getChildren().getFirst());
+        assertSame(existingAlbum, existingAlbum.getChildren().getLast().getParent());
+    }
+
+    @Test
+    void doesNotDuplicateExistingRootDirectoryWhenMerging() throws IOException {
+        Path music = Files.createDirectory(tempDir.resolve("music"));
+        Files.createFile(music.resolve("song.mp3"));
+        Path indexPath = tempDir.resolve("index.dat");
+
+        RootIndexItem root = new RootIndexItem();
+        DirectoryIndexItem existingMusic = new DirectoryIndexItem("music");
+        existingMusic.setParent(root);
+        root.addChildren(List.of(existingMusic));
+
+        new IndexService(indexPath).index(root, List.of(music));
+
+        assertEquals(1, root.getChildren().size());
+        assertSame(existingMusic, root.getChildren().getFirst());
+        assertEquals(List.of("song.mp3"), existingMusic.getChildren().stream()
+                .map(IndexItem::getName)
+                .toList());
+    }
+
+    @Test
+    void mergesMissingNestedAlbumIntoExistingTree() throws IOException {
+        Path music = Files.createDirectory(tempDir.resolve("music"));
+        Files.createDirectory(music.resolve("album1"));
+        Path album2Path = Files.createDirectory(music.resolve("album2"));
+        Files.createDirectory(album2Path.resolve("album3"));
+        Path indexPath = tempDir.resolve("index.dat");
+
+        RootIndexItem root = new RootIndexItem();
+        DirectoryIndexItem existingMusic = new DirectoryIndexItem("music");
+        existingMusic.setParent(root);
+        DirectoryIndexItem album1 = new DirectoryIndexItem("album1");
+        album1.setParent(existingMusic);
+        DirectoryIndexItem album2 = new DirectoryIndexItem("album2");
+        album2.setParent(existingMusic);
+        existingMusic.addChildren(List.of(album1, album2));
+        root.addChildren(List.of(existingMusic));
+
+        new IndexService(indexPath).index(root, List.of(music));
+
+        assertEquals(List.of("album1", "album2"), existingMusic.getChildren().stream()
+                .map(IndexItem::getName)
+                .toList());
+        assertSame(album1, existingMusic.getChildren().getFirst());
+        assertSame(album2, existingMusic.getChildren().getLast());
+        assertEquals(List.of("album3"), album2.getChildren().stream()
+                .map(IndexItem::getName)
+                .toList());
+        assertSame(album2, album2.getChildren().getFirst().getParent());
+    }
+
+    @Test
+    void removesAlbumMissingFromDiskWhenMergingRoot() throws IOException {
+        Path album1Path = Files.createDirectory(tempDir.resolve("album1"));
+        Path album2Path = Files.createDirectory(tempDir.resolve("album2"));
+        Path indexPath = tempDir.resolve("index.dat");
+
+        RootIndexItem root = new RootIndexItem();
+        DirectoryIndexItem album1 = new DirectoryIndexItem("album1");
+        album1.setParent(root);
+        DirectoryIndexItem album2 = new DirectoryIndexItem("album2");
+        album2.setParent(root);
+        DirectoryIndexItem album3 = new DirectoryIndexItem("album3");
+        album3.setParent(root);
+        root.addChildren(List.of(album1, album2, album3));
+
+        new IndexService(indexPath).index(root, List.of(album1Path, album2Path));
+
+        assertEquals(List.of("album1", "album2"), root.getChildren().stream()
+                .map(IndexItem::getName)
+                .toList());
+        assertSame(album1, root.getChildren().getFirst());
+        assertSame(album2, root.getChildren().getLast());
+        assertFalse(root.getChildren().contains(album3));
     }
 
     @Test
@@ -92,7 +202,8 @@ class IndexServiceTest {
         Files.createFile(music.resolve("song.mp3"));
         Path indexPath = tempDir.resolve("index.dat");
 
-        RootIndexItem root = new IndexService(indexPath).index(List.of(music));
+        RootIndexItem root = new RootIndexItem();
+        new IndexService(indexPath).index(root, List.of(music));
         IndexItem directory = root.getChildren().getFirst();
         IndexItem file = directory.getChildren().getFirst();
 
@@ -107,7 +218,8 @@ class IndexServiceTest {
         Files.createFile(music.resolve("song.mp3"));
         Path indexPath = tempDir.resolve("index.dat");
 
-        RootIndexItem root = new IndexService(indexPath).index(List.of(music));
+        RootIndexItem root = new RootIndexItem();
+        new IndexService(indexPath).index(root, List.of(music));
         IndexItem directory = root.getChildren().getFirst();
         IndexItem file = directory.getChildren().getFirst();
 

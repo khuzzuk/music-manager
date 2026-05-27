@@ -4,8 +4,11 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class IndexService {
@@ -15,43 +18,98 @@ public class IndexService {
         this.indexPath = indexPath;
     }
 
-    public RootIndexItem index(List<Path> rootPaths) throws IOException {
-        RootIndexItem root = new RootIndexItem();
-        List<IndexItem> children = rootPaths.stream()
+    /**
+     * Extends the supplied root item with entries found under {@code rootPaths}
+     * and writes the merged tree to the configured index file.
+     * <p>
+     * Hard assumption: every path in {@code rootPaths} is a directory.
+     */
+    public RootIndexItem index(RootIndexItem root, List<Path> rootPaths) throws IOException {
+        List<Path> children = rootPaths.stream()
                 .filter(path -> rootPaths.stream().noneMatch(other -> isNestedPath(path, other)))
                 .sorted(Comparator.comparing(this::getName, String.CASE_INSENSITIVE_ORDER))
-                .map(path -> buildItem(path, root))
                 .toList();
-        root.addChildren(children);
+        removeMissingChildren(root, children);
+        children.forEach(path -> mergeDirectory(root, path));
+        sortChildren(root);
         saveIndex(root);
         return root;
     }
 
-    private IndexItem buildItem(Path path, IndexItem parent) {
+    private void mergeDirectory(IndexItem parent, Path path) {
+        DirectoryIndexItem directory = findDirectory(parent, getName(path));
+        boolean createdDirectory = directory == null;
+        if (directory == null) {
+            directory = new DirectoryIndexItem(getName(path));
+            directory.setParent(parent);
+            parent.getChildren().add(directory);
+        }
+
         try {
-            if (!Files.isDirectory(path)) {
-                SoundFileIndexItem item = new SoundFileIndexItem(getName(path));
-                item.setParent(parent);
-                return item;
-            }
-
             try (Stream<Path> children = Files.list(path)) {
-                DirectoryIndexItem item = new DirectoryIndexItem(getName(path));
-                item.setParent(parent);
-
-                List<IndexItem> childItems = children
+                DirectoryIndexItem targetDirectory = directory;
+                List<Path> childPaths = children
                         .sorted(Comparator.comparing(this::getName, String.CASE_INSENSITIVE_ORDER))
-                        .map(child -> buildItem(child, item))
                         .toList();
-
-                item.addChildren(childItems);
-                return item;
+                removeMissingChildren(targetDirectory, childPaths);
+                childPaths.forEach(child -> mergeChild(targetDirectory, child));
+                sortChildren(directory);
             }
         } catch (IOException | SecurityException e) {
+            if (createdDirectory) {
+                parent.getChildren().remove(directory);
+                UnreadableIndexItem item = new UnreadableIndexItem(getName(path));
+                item.setParent(parent);
+                parent.getChildren().add(item);
+            }
+        }
+    }
+
+    private void removeMissingChildren(IndexItem parent, List<Path> childPaths) {
+        Set<String> existingNames = childPaths.stream()
+                .map(this::getName)
+                .map(String::toLowerCase)
+                .collect(Collectors.toSet());
+        parent.getChildren().removeIf(child -> !existingNames.contains(child.getName().toLowerCase()));
+    }
+
+    private void mergeChild(DirectoryIndexItem parent, Path path) {
+        try {
+            if (Files.isDirectory(path)) {
+                mergeDirectory(parent, path);
+                return;
+            }
+
+            if (findChild(parent, getName(path), SoundFileIndexItem.class) == null) {
+                SoundFileIndexItem item = new SoundFileIndexItem(getName(path));
+                item.setParent(parent);
+                parent.getChildren().add(item);
+            }
+        } catch (SecurityException e) {
             UnreadableIndexItem item = new UnreadableIndexItem(getName(path));
             item.setParent(parent);
-            return item;
+            parent.getChildren().add(item);
         }
+    }
+
+    private DirectoryIndexItem findDirectory(IndexItem parent, String name) {
+        return findChild(parent, name, DirectoryIndexItem.class);
+    }
+
+    private <T extends IndexItem> T findChild(IndexItem parent, String name, Class<T> type) {
+        return parent.getChildren().stream()
+                .filter(type::isInstance)
+                .map(type::cast)
+                .filter(child -> child.getName().equalsIgnoreCase(name))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private void sortChildren(IndexItem item) {
+        List<IndexItem> sortedChildren = new ArrayList<>(item.getChildren());
+        sortedChildren.sort(Comparator.comparing(IndexItem::getName, String.CASE_INSENSITIVE_ORDER));
+        item.getChildren().clear();
+        item.getChildren().addAll(sortedChildren);
     }
 
     private boolean isNestedPath(Path path, Path possibleParent) {
