@@ -1,6 +1,7 @@
 package pl.khuzzuk.index;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
@@ -8,7 +9,13 @@ import java.util.List;
 import java.util.stream.Stream;
 
 public class IndexService {
-    public RootIndexItem buildTree(List<Path> rootPaths) {
+    private final Path indexPath;
+
+    public IndexService(Path indexPath) {
+        this.indexPath = indexPath;
+    }
+
+    public RootIndexItem index(List<Path> rootPaths) throws IOException {
         RootIndexItem root = new RootIndexItem();
         List<IndexItem> children = rootPaths.stream()
                 .filter(path -> rootPaths.stream().noneMatch(other -> isNestedPath(path, other)))
@@ -16,6 +23,7 @@ public class IndexService {
                 .map(path -> buildItem(path, root))
                 .toList();
         root.addChildren(children);
+        saveIndex(root);
         return root;
     }
 
@@ -56,5 +64,40 @@ public class IndexService {
     private String getName(Path path) {
         Path fileName = path.getFileName();
         return fileName == null ? path.toString() : fileName.toString();
+    }
+
+    private void saveIndex(IndexItem root) throws IOException {
+        StringBuilder index = new StringBuilder();
+        appendIndexItem(index, root);
+        Files.writeString(indexPath, index.toString(), StandardCharsets.UTF_8);
+    }
+
+    private void appendIndexItem(StringBuilder index, IndexItem item) {
+        if (item instanceof UnreadableIndexItem) {
+            return;
+        }
+
+        if (item.isRoot()) {
+            index.append(System.lineSeparator());
+        }
+
+        if (item.isRoot() || item instanceof DirectoryIndexItem) {
+            index.append("D|");
+        }
+
+        index.append(escape(item.getName())).append(System.lineSeparator());
+        if (!item.hasChildren()) {
+            return;
+        }
+
+        item.getChildren().forEach(child -> appendIndexItem(index, child));
+    }
+
+    private String escape(String value) {
+        return value
+                .replace("\\", "\\\\")
+                .replace("\r", "\\r")
+                .replace("\n", "\\n")
+                .replace("|", "\\|");
     }
 }

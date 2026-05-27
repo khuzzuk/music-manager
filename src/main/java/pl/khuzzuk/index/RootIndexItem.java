@@ -22,6 +22,11 @@ public class RootIndexItem implements IndexItem {
     }
 
     @Override
+    public boolean hasChildren() {
+        return !children.isEmpty();
+    }
+
+    @Override
     public IndexItem getParent() {
         return null;
     }

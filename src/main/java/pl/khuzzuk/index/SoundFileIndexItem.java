@@ -26,6 +26,11 @@ public class SoundFileIndexItem implements IndexItem {
     }
 
     @Override
+    public boolean hasChildren() {
+        return false;
+    }
+
+    @Override
     public IndexItem getParent() {
         return parent;
     }

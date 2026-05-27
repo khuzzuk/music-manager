@@ -28,6 +28,11 @@ public class DirectoryIndexItem implements IndexItem {
     }
 
     @Override
+    public boolean hasChildren() {
+        return !children.isEmpty();
+    }
+
+    @Override
     public IndexItem getParent() {
         return parent;
     }

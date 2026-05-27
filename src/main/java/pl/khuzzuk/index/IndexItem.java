@@ -9,6 +9,8 @@ public interface IndexItem {
 
     List<IndexItem> getChildren();
 
+    boolean hasChildren();
+
     IndexItem getParent();
 
     void setParent(IndexItem parent);

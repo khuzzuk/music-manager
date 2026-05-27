@@ -7,7 +7,8 @@ implementations, error handling, and change contracts.
 ## Files
 
 - `src/main/java/pl/khuzzuk/index/IndexService.java` - builds an `IndexItem` tree
-  from one or more filesystem paths.
+  from one or more filesystem paths and writes the result to `index.dat`.
+- `index.dat` - generated index output written by `IndexService.index(...)`.
 - `src/main/java/pl/khuzzuk/index/IndexItem.java` - common tree node interface.
 - `src/main/java/pl/khuzzuk/index/RootIndexItem.java` - virtual root node named
   `root`.
@@ -16,30 +17,45 @@ implementations, error handling, and change contracts.
 - `src/main/java/pl/khuzzuk/index/SoundFileIndexItem.java` - leaf node for files.
 - `src/main/java/pl/khuzzuk/index/UnreadableIndexItem.java` - leaf node used when a
   path cannot be read.
+- `src/test/java/pl/khuzzuk/index/IndexServiceTest.java` - focused tests for tree
+  building, parent links, ordering, and `index.dat` output.
 
 ## Service Role
 
-`IndexService` scans filesystem paths and returns a tree of `IndexItem` nodes under
-a virtual `RootIndexItem`. It is responsible for filesystem traversal only. It does
-not currently filter by audio extension, read audio metadata, build Swing tree
-nodes, or connect the index to the player.
+`IndexService` scans filesystem paths, returns a tree of `IndexItem` nodes under a
+virtual `RootIndexItem`, and writes the resulting tree to `index.dat`. It is
+responsible for filesystem traversal and index persistence only. It does not
+currently filter by audio extension, read audio metadata, build Swing tree nodes,
+or connect the index to the player.
 
 The current implementation treats every non-directory path as a
 `SoundFileIndexItem`.
 
 ## Public API
 
-### buildTree(List<Path>)
+### Constructors
 
 ```java
-public RootIndexItem buildTree(List<Path> rootPaths)
+public IndexService()
+public IndexService(Path indexPath)
 ```
 
-Builds an `IndexItem` tree under a virtual `RootIndexItem`.
+The no-arg constructor writes to `index.dat` in the process working directory. The
+`Path` constructor injects the output file location and is used by tests to avoid
+writing a project-local runtime file.
+
+### index(List<Path>)
+
+```java
+public RootIndexItem index(List<Path> rootPaths) throws IOException
+```
+
+Builds an `IndexItem` tree under a virtual `RootIndexItem` and writes the generated
+tree to the configured index path.
 
 Current behavior:
 
-- does not declare `throws IOException`;
+- declares `throws IOException` for `index.dat` write failures;
 - creates a `RootIndexItem` named `root`;
 - normalizes root paths with `toAbsolutePath().normalize()` for filtering;
 - removes any root path that is nested under another root path from the same input
@@ -48,12 +64,13 @@ Current behavior:
   `String.CASE_INSENSITIVE_ORDER`;
 - maps each path through private `buildItem(path, root)`;
 - adds every resulting item to the root's children;
+- writes the tree to the configured index path;
 - returns the `RootIndexItem`.
 
 ## Internal Flow
 
-Before recursive scanning starts, `buildTree(List<Path>)` filters redundant root
-paths inline in its stream pipeline. If the input contains both `C:\Music` and
+Before recursive scanning starts, `index(List<Path>)` filters redundant root paths
+inline in its stream pipeline. If the input contains both `C:\Music` and
 `C:\Music\Rock`, only `C:\Music` remains as a direct child of `RootIndexItem`;
 `Rock` can still appear inside the scanned tree under `Music`.
 
@@ -82,6 +99,25 @@ Current flow:
 `getName(Path)` uses `path.getFileName().toString()`. If `getFileName()` is `null`
 for a root path such as `C:\`, it falls back to `path.toString()`.
 
+After the tree is built, `saveIndex(IndexItem root)` writes the configured index
+path in UTF-8.
+The current format is one line per persisted item, in pre-order traversal order.
+Directories are marked with a compact `D|` prefix, while sound files are written
+as bare escaped names:
+
+```text
+D|escaped-directory-name
+escaped-file-name
+```
+
+`RootIndexItem` is persisted like a directory as `D|root`, with one empty line
+before the root line. The file does not include an explicit depth value; consumers
+should derive relationships from item order. `UnreadableIndexItem` nodes are
+temporary in-memory nodes and are not written to `index.dat`. There is no
+`UNKNOWN` marker in the persisted format; any future non-directory `IndexItem`
+implementation that is not `UnreadableIndexItem` would currently be written as a
+bare escaped name. Names escape backslash, carriage return, newline, and `|`.
+
 ## IndexItem Contract
 
 `IndexItem` exposes:
@@ -90,6 +126,7 @@ for a root path such as `C:\`, it falls back to `path.toString()`.
 boolean isDirectory();
 String getName();
 List<IndexItem> getChildren();
+boolean hasChildren();
 IndexItem getParent();
 void setParent(IndexItem parent);
 boolean isRoot();
@@ -112,8 +149,9 @@ Behavior:
 - `getParent()` returns `null`;
 - `setParent(...)` is a no-op;
 - `getChildren()` returns the mutable backing `List<IndexItem>`;
+- `hasChildren()` returns `true` when the backing child list is not empty;
 - children are added by package-private `addChildren(List<IndexItem>)`;
-- all paths passed to `IndexService.buildTree(List<Path>)` become direct children
+- all paths passed to `IndexService.index(List<Path>)` become direct children
   of this root.
 
 ### DirectoryIndexItem
@@ -125,6 +163,7 @@ Behavior:
 - `isDirectory()` returns `true`;
 - `isRoot()` returns `false`;
 - `getChildren()` returns the mutable backing `List<IndexItem>`;
+- `hasChildren()` returns `true` when the backing child list is not empty;
 - children are added by package-private `addChildren(List<IndexItem>)`;
 - `parent` is set by `IndexService`;
 - child nodes receive this directory as their parent during recursive building.
@@ -138,6 +177,7 @@ Behavior:
 - `isDirectory()` returns `false`;
 - `isRoot()` returns `false`;
 - `getChildren()` returns `List.of()`;
+- `hasChildren()` returns `false`;
 - `parent` is set by `IndexService`;
 - despite the class name, the current service does not validate whether the file is
   actually an audio file.
@@ -151,6 +191,7 @@ Behavior:
 - `isDirectory()` always returns `false`;
 - `isRoot()` returns `false`;
 - `getChildren()` returns `List.of()`;
+- `hasChildren()` returns `false`;
 - `parent` is set by `IndexService`;
 - used when directory listing fails with `IOException` or access checks fail with
   `SecurityException`.
@@ -170,8 +211,10 @@ unreadable.
 
 Current rules:
 
-- `buildTree(...)` and `buildItem(...)` do not throw `IOException`.
-- `buildTree(...)` always returns `RootIndexItem`.
+- `buildItem(...)` does not throw `IOException`.
+- `index(...)` may throw `IOException` only when writing the configured index file
+  fails.
+- `index(...)` returns `RootIndexItem` after successful tree build and file write.
 - Any unreadable path becomes an `UnreadableIndexItem` leaf with
   `isDirectory() == false`.
 - A readable parent directory can still contain unreadable child nodes.
@@ -195,24 +238,32 @@ When changing this area, keep these rules:
   document the ownership boundary between indexing and playback.
 - Preserve parent links unless the caller contract is explicitly changed. Direct
   children of `RootIndexItem` should use that root as their parent.
+- If `IndexItem` gains or loses methods such as `hasChildren()`, update every
+  implementation and this document together.
 - Preserve explicit `isRoot()` semantics: only `RootIndexItem` should return
   `true`.
 - Preserve nested root filtering unless the task explicitly asks to expose every
   input path as a direct root child.
 - Preserve graceful handling of unreadable paths unless the task explicitly asks
   for fail-fast behavior.
+- Preserve configured index-file writing from `index(...)` unless persistence is
+  moved to a dedicated component.
 - If tests are added, use temporary directories and files instead of project-local
   real paths.
 
 ## Known Risks And Weaknesses
 
-- There are no tests for recursive scanning, sorting, parent links, multiple root
-  paths, files, or unreadable directories.
+- There are tests for `index.dat` output shape, absence of explicit depth, root
+  and child ordering, nested-root filtering, parent links, and `hasChildren()`.
+- There are no tests for unreadable directory behavior because reliable permission
+  manipulation is platform-dependent.
 - `RootIndexItem.getChildren()` exposes a mutable list.
 - `SoundFileIndexItem` currently represents every non-directory path, not only
   sound files.
 - `DirectoryIndexItem.getChildren()` exposes a mutable list.
 - `UnreadableIndexItem` does not store the exception or reason why reading failed.
+- `IndexService.getPersistentType(IndexItem)` remains in the class but is not used
+  by the current save path.
 - Symbolic links are not handled specially. `Files.isDirectory(path)` follows links
   by default, so linked directory cycles may be a risk if such paths are scanned.
 - Missing paths become `SoundFileIndexItem` because `Files.isDirectory(path)`
@@ -220,17 +271,22 @@ When changing this area, keep these rules:
 
 ## Testing Guidance
 
-Useful focused tests for this area:
+Existing focused tests in `IndexServiceTest` cover:
 
-- building a tree for an empty temporary directory;
-- building a tree from multiple root paths;
-- verifying that a root path nested under another input root path is filtered out;
-- building nested directories and files;
-- verifying case-insensitive child sorting;
-- verifying parent links and `isRoot()` for the virtual root and non-root nodes;
-- verifying non-directory root behavior;
-- verifying unreadable directory behavior where the platform allows permission
-  manipulation.
+- writing root as `D|root` with a leading empty line;
+- writing directories with `D|` and files as bare escaped names;
+- not writing explicit depth values;
+- case-insensitive sorting of root paths and children;
+- filtering nested root paths;
+- preserving parent links;
+- `hasChildren()` behavior for root, directories, and files.
+
+Additional useful tests:
+
+- unreadable directory behavior where the platform allows permission manipulation;
+- non-directory root behavior;
+- missing path behavior;
+- escaping special characters where the platform allows such file names.
 
 Run verification with:
 
@@ -244,18 +300,24 @@ Paste this block when Codex needs to work on indexing:
 
 ```text
 The Music Manager project has `pl.khuzzuk.index.IndexService`.
-`IndexService.buildTree(List<Path>)` returns a `RootIndexItem` and does not declare
-`throws IOException`.
+`IndexService` has a no-arg constructor that writes to `index.dat` and a
+`IndexService(Path indexPath)` constructor for injecting the output file.
+`IndexService.index(List<Path>)` returns a `RootIndexItem` and declares
+`throws IOException` for writing the configured index file.
 
 The returned root is a virtual `RootIndexItem` with name "root". Every path passed
-to `buildTree(List<Path>)` is first compared with other input paths using
+to `index(List<Path>)` is first compared with other input paths using
 `toAbsolutePath().normalize()`. If one input path is nested under another input
 path, the nested path is skipped as a direct root child. Remaining paths are sorted
 by display name, scanned with buildItem, and added as direct children of the root.
+After building the tree, IndexService writes `index.dat` as UTF-8 text lines
+without explicit depth. Directories, including root, are written as
+`D|escaped-name`; sound files are written as bare escaped names. Root is written as
+`D|root` and is preceded by one empty line. Unreadable nodes are not persisted.
 
 Node interface:
-IndexItem has isDirectory(), getName(), getChildren(), getParent(), setParent(),
-and isRoot(). isRoot() is explicit: only RootIndexItem returns true.
+IndexItem has isDirectory(), getName(), getChildren(), hasChildren(), getParent(),
+setParent(), and isRoot(). isRoot() is explicit: only RootIndexItem returns true.
 
 Implementations:
 - RootIndexItem: virtual container, name "root", isRoot true, mutable children.
