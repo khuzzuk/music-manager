@@ -7,12 +7,19 @@ import pl.khuzzuk.index.RootIndexItem;
 
 import javax.swing.JTree;
 import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 
 public class FileTree extends JTree {
     public FileTree(IndexReaderService indexReaderService, IndexService indexService) {
         super(createRoot(indexReaderService.getCurrentRootIndexItem()));
+        setToggleClickCount(1);
+        putClientProperty("JTree.lineStyle", "None");
+        UIManager.put("Tree.collapsedIcon", new TreeToggleIcon(false));
+        UIManager.put("Tree.expandedIcon", new TreeToggleIcon(true));
+        updateUI();
+        setCellRenderer(new FileTreeCellRenderer());
         indexService.addIndexListener(root -> SwingUtilities.invokeLater(() -> refresh(root)));
         expandRow(0);
     }
