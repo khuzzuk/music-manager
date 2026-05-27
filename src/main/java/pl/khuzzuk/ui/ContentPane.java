@@ -5,27 +5,21 @@ import pl.khuzzuk.player.PlaylistSoundFile;
 import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JTable;
-import javax.swing.JTree;
-import javax.swing.tree.DefaultMutableTreeNode;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 
 public class ContentPane extends JPanel {
-    private JTree fileTree;
-    private JTable tracksTable;
-    private JList<PlaylistSoundFile> playlist;
+    private final FileTree fileTree;
+    private final JTable tracksTable;
+    private final JList<PlaylistSoundFile> playlist;
 
     public ContentPane() {
         super(new GridBagLayout());
 
         this.tracksTable = new JTable();
         this.playlist = new JList<>();
-
-        DefaultMutableTreeNode root = new DefaultMutableTreeNode("Muzyka");
-        root.add(new DefaultMutableTreeNode("1"));
-        root.add(new DefaultMutableTreeNode("2"));
-        fileTree = new JTree(root);
+        this.fileTree = new FileTree();
 
         GridBagConstraints c = new GridBagConstraints();
         c.fill = GridBagConstraints.BOTH;

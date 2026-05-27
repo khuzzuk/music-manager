@@ -22,6 +22,10 @@ public class MainWindow extends JFrame {
         PlayerPane playerPane = new PlayerPane();
         add(playerPane, BorderLayout.SOUTH);
 
+        MainMenuBar mainMenuBar = new MainMenuBar();
+        mainMenuBar.init();
+        setJMenuBar(mainMenuBar);
+
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         addWindowListener(new CloseAppListener(this, settingsService));
     }
