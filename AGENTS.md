@@ -1,5 +1,8 @@
 # Codex project notes
 
+All `Service` instances should be created in `MusicManager.initComponents()` and
+passed to dependent classes through constructors.
+
 For documentation work, use:
 
 - `docs/codex-documentation-prompt.md`

@@ -1,27 +1,42 @@
 package pl.khuzzuk.ui;
 
-import pl.khuzzuk.settings.SettingsService;
+import pl.khuzzuk.index.IndexItem;
+import pl.khuzzuk.index.IndexReaderService;
+import pl.khuzzuk.index.IndexService;
+import pl.khuzzuk.index.RootIndexItem;
 
 import javax.swing.JTree;
+import javax.swing.SwingUtilities;
 import javax.swing.tree.DefaultMutableTreeNode;
-import java.nio.file.Path;
+import javax.swing.tree.DefaultTreeModel;
 
 public class FileTree extends JTree {
-    public FileTree(SettingsService settingsService) {
-        super(createRoot(settingsService));
+    public FileTree(IndexReaderService indexReaderService, IndexService indexService) {
+        super(createRoot(indexReaderService.getCurrentRootIndexItem()));
+        indexService.addIndexListener(root -> SwingUtilities.invokeLater(() -> refresh(root)));
+        expandRow(0);
     }
 
-    private static DefaultMutableTreeNode createRoot(SettingsService settingsService) {
+    private void refresh(RootIndexItem rootIndexItem) {
+        setModel(new DefaultTreeModel(createRoot(rootIndexItem)));
+        expandRow(0);
+    }
+
+    private static DefaultMutableTreeNode createRoot(RootIndexItem rootIndexItem) {
         DefaultMutableTreeNode root = new DefaultMutableTreeNode("Muzyka");
-        settingsService.getSettings().indexedPaths().stream()
-                .map(FileTree::getDirectoryName)
-                .map(DefaultMutableTreeNode::new)
+        rootIndexItem.getChildren().stream()
+                .filter(IndexItem::isDirectory)
+                .map(FileTree::createNode)
                 .forEach(root::add);
         return root;
     }
 
-    private static String getDirectoryName(Path path) {
-        Path fileName = path.getFileName();
-        return fileName == null ? path.toString() : fileName.toString();
+    private static DefaultMutableTreeNode createNode(IndexItem item) {
+        DefaultMutableTreeNode node = new DefaultMutableTreeNode(item.getName());
+        item.getChildren().stream()
+                .filter(IndexItem::isDirectory)
+                .map(FileTree::createNode)
+                .forEach(node::add);
+        return node;
     }
 }

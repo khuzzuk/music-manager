@@ -42,10 +42,14 @@ The current implementation treats every non-directory path as a
 
 ```java
 public IndexService(Path indexPath)
+public void addIndexListener(Consumer<RootIndexItem> listener)
+public void removeIndexListener(Consumer<RootIndexItem> listener)
 ```
 
 The `Path` constructor injects the output file location and is used by tests to
 avoid writing a project-local runtime file.
+Listeners are notified with the supplied `RootIndexItem` after a successful
+`index(...)` call and after the index has been written.
 
 ### index(RootIndexItem, List<Path>)
 

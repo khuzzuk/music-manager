@@ -8,14 +8,20 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class IndexService {
     private final Path indexPath;
+    private final List<Consumer<RootIndexItem>> indexListeners = new ArrayList<>();
 
     public IndexService(Path indexPath) {
         this.indexPath = indexPath;
+    }
+
+    public void addIndexListener(Consumer<RootIndexItem> listener) {
+        indexListeners.add(listener);
     }
 
     /**
@@ -37,7 +43,12 @@ public class IndexService {
         children.forEach(path -> mergeDirectory(root, path));
         sortChildren(root);
         saveIndex(root);
+        notifyIndexListeners(root);
         return root;
+    }
+
+    private void notifyIndexListeners(RootIndexItem root) {
+        indexListeners.forEach(listener -> listener.accept(root));
     }
 
     private void mergeDirectory(IndexItem parent, Path path) {

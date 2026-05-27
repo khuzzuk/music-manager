@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -280,6 +281,20 @@ class IndexServiceTest {
         assertTrue(directory.hasChildren());
         assertFalse(file.hasChildren());
         assertInstanceOf(SoundFileIndexItem.class, file);
+    }
+
+    @Test
+    void notifiesListenersAfterSuccessfulIndex() throws IOException {
+        Path music = Files.createDirectory(tempDir.resolve("music"));
+        Path indexPath = tempDir.resolve("index.dat");
+        RootIndexItem root = new RootIndexItem();
+        IndexService indexService = new IndexService(indexPath);
+        AtomicReference<RootIndexItem> notifiedRoot = new AtomicReference<>();
+        indexService.addIndexListener(notifiedRoot::set);
+
+        indexService.index(root, List.of(music));
+
+        assertSame(root, notifiedRoot.get());
     }
 
     private String escape(String value) {
