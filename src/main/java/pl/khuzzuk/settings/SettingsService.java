@@ -10,7 +10,7 @@ import java.util.Properties;
 
 public class SettingsService {
     private Settings settings;
-    private SettingsToPropertiesMapper settingsToPropertiesMapper;
+    private final SettingsToPropertiesMapper settingsToPropertiesMapper;
 
     public SettingsService(SettingsToPropertiesMapper settingsToPropertiesMapper) throws IOException {
         this.settingsToPropertiesMapper = settingsToPropertiesMapper;
@@ -35,6 +35,7 @@ public class SettingsService {
         try (OutputStream out = Files.newOutputStream(path)) {
             props.store(out, "Settings");
         }
+        this.settings = settings;
     }
 
     private Path getSettingsPath() {

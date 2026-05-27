@@ -1,6 +1,7 @@
 package pl.khuzzuk.settings;
 
-import java.io.IOException;
+import java.nio.file.Path;
+import java.util.List;
 
 public record Settings(
         int windowX,
@@ -9,5 +10,11 @@ public record Settings(
         int windowHeight,
         boolean maximizedWindow,
         String lastTreePosition,
-        String lastPlaylist) {
+        String lastPlaylist,
+        List<Path> indexedPaths,
+        Path lastChoosenPath) {
+    public Settings {
+        indexedPaths = indexedPaths == null ? List.of() : List.copyOf(indexedPaths);
+        lastChoosenPath = lastChoosenPath == null ? Path.of("") : lastChoosenPath;
+    }
 }

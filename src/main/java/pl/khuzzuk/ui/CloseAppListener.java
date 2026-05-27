@@ -3,6 +3,7 @@ package pl.khuzzuk.ui;
 import pl.khuzzuk.settings.Settings;
 import pl.khuzzuk.settings.SettingsService;
 
+import javax.swing.JOptionPane;
 import java.awt.Rectangle;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -28,12 +29,17 @@ public class CloseAppListener extends WindowAdapter {
                 bounds.height,
                 oldSettings.maximizedWindow(),
                 oldSettings.lastTreePosition(),
-                oldSettings.lastPlaylist());
+                oldSettings.lastPlaylist(),
+                oldSettings.indexedPaths(),
+                oldSettings.lastChoosenPath());
         try {
             settingsService.saveSettings(newSettings);
         } catch (IOException ex) {
-            ex.printStackTrace();
+            JOptionPane.showMessageDialog(
+                    mainWindow,
+                    "Nie udalo sie zapisac ustawien aplikacji.",
+                    "Blad zapisu",
+                    JOptionPane.ERROR_MESSAGE);
         }
-
     }
 }

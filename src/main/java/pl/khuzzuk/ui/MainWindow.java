@@ -17,13 +17,12 @@ public class MainWindow extends JFrame {
         setBounds(settings.windowX(),  settings.windowY(), settings.windowWidth(), settings.windowHeight());
 
         setLayout(new BorderLayout(5, 5));
-        ContentPane contentPane = new ContentPane();
+        ContentPane contentPane = new ContentPane(settingsService);
         add(contentPane, BorderLayout.CENTER);
         PlayerPane playerPane = new PlayerPane();
         add(playerPane, BorderLayout.SOUTH);
 
-        MainMenuBar mainMenuBar = new MainMenuBar();
-        mainMenuBar.init();
+        MainMenuBar mainMenuBar = new MainMenuBar(settingsService);
         setJMenuBar(mainMenuBar);
 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);

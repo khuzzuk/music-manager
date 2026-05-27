@@ -1,13 +1,19 @@
 package pl.khuzzuk.ui;
 
-import javax.swing.JFileChooser;
+import pl.khuzzuk.settings.SettingsService;
+
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
-import java.io.File;
+import javax.swing.SwingUtilities;
+import java.awt.Window;
 
 public class MainMenuBar extends JMenuBar {
-    void init() {
+    private final SettingsService settingsService;
+    private IndexDirectoriesDialog indexDirectoriesDialog;
+
+    public MainMenuBar(SettingsService settingsService) {
+        this.settingsService = settingsService;
         JMenu menu = new JMenu("Plik");
         JMenuItem menuIndexItem = new JMenuItem("Indeks");
         menuIndexItem.addActionListener(event -> chooseIndexDirectory());
@@ -16,15 +22,12 @@ public class MainMenuBar extends JMenuBar {
     }
 
     private void chooseIndexDirectory() {
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("Wybierz katalog do indeksowania");
-        fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        fileChooser.setAcceptAllFileFilterUsed(false);
-
-        int result = fileChooser.showOpenDialog(this);
-        if (result == JFileChooser.APPROVE_OPTION) {
-            File selectedDirectory = fileChooser.getSelectedFile();
-            System.out.println("Wybrany katalog: " + selectedDirectory.getAbsolutePath());
+        if (indexDirectoriesDialog == null || !indexDirectoriesDialog.isDisplayable()) {
+            Window owner = SwingUtilities.getWindowAncestor(this);
+            indexDirectoriesDialog = new IndexDirectoriesDialog(owner, settingsService);
+            indexDirectoriesDialog.setLocationRelativeTo(this);
         }
+
+        indexDirectoriesDialog.showDialog();
     }
 }

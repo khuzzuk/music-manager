@@ -17,6 +17,12 @@ The class in this repository is named `SettingsService`, not `SettingService`.
 - `src/main/java/pl/khuzzuk/MusicManager.java` - creates the global service
   instance.
 - `src/main/java/pl/khuzzuk/ui/MainWindow.java` - reads window settings on startup.
+- `src/main/java/pl/khuzzuk/ui/MainMenuBar.java` - opens the indexed directory
+  dialog from the Index menu.
+- `src/main/java/pl/khuzzuk/ui/IndexDirectoriesDialog.java` - lists indexed
+  directories and updates indexed path settings.
+- `src/main/java/pl/khuzzuk/ui/FileTree.java` - reads `indexedPaths` and displays
+  indexed directory names in the tree.
 - `src/main/java/pl/khuzzuk/ui/CloseAppListener.java` - saves window settings when
   the application closes.
 
@@ -58,9 +64,8 @@ public Settings getSettings()
 
 Returns the `Settings` object currently held in memory by the service.
 
-Important current limitation: `saveSettings(Settings settings)` writes data to the
-file but does not update the `this.settings` field. After saving, `getSettings()`
-may still return the state loaded during construction.
+After `saveSettings(Settings settings)` succeeds, `getSettings()` returns the saved
+object because the service updates `this.settings` after writing the file.
 
 ### saveSettings
 
@@ -74,6 +79,7 @@ Behavior:
 - opens `settings.properties` through `Files.newOutputStream(path)`;
 - writes the full set with `props.store(out, "Settings")`;
 - overwrites the file contents;
+- updates `this.settings` after the file write succeeds;
 - may throw `IOException`.
 
 `Properties.store(...)` adds a comment and timestamp and does not guarantee a
@@ -127,12 +133,20 @@ public record Settings(
         int windowHeight,
         boolean maximizedWindow,
         String lastTreePosition,
-        String lastPlaylist) {
+        String lastPlaylist,
+        List<Path> indexedPaths,
+        Path lastChoosenPath) {
 }
 ```
 
 The record is immutable. Changing one value requires creating a new `Settings`
 instance and copying the remaining fields.
+
+The compact constructor normalizes nullable path fields:
+
+- `indexedPaths == null` becomes `List.of()`;
+- otherwise `indexedPaths` is copied with `List.copyOf(...)`;
+- `lastChoosenPath == null` becomes `Path.of("")`.
 
 ## Property Keys
 
@@ -147,14 +161,23 @@ The mapper uses these keys:
 | `maximizedWindow` | `window.maximize` | `false` |
 | `lastTreePosition` | `last.tree.position` | empty string |
 | `lastPlaylist` | `last.playlist` | empty string |
+| `indexedPaths` | `indexed.paths` | empty string |
+| `lastChoosenPath` | `last.choosen.path` | empty path |
+
+`lastChoosenPath` intentionally uses the current field spelling from code.
+`indexedPaths` is stored as one property joined with `File.pathSeparator`, which is
+the standard Java separator for lists of paths (`;` on Windows, `:` on Unix-like
+systems).
 
 Example:
 
 ```properties
 #Settings
 #Tue May 26 20:58:28 CEST 2026
+indexed.paths=C\:\\Music;D\:\\Archive\\Music
 last.playlist=
 last.tree.position=
+last.choosen.path=C\:\\Music
 window.height=1035
 window.maximize=false
 window.width=2270
@@ -171,9 +194,16 @@ window.y=150
 4. `MainWindow` calls `settingsService.getSettings()` and applies the window bounds
    with `setBounds(settings.windowX(), settings.windowY(), settings.windowWidth(), settings.windowHeight())`.
 5. `MainWindow` registers `CloseAppListener`.
-6. `CloseAppListener.windowClosing(...)` reads the current window `bounds`, combines
-   them with the previous `maximizedWindow`, `lastTreePosition`, and `lastPlaylist`
-   values, then calls `settingsService.saveSettings(newSettings)`.
+6. `MainWindow` creates `MainMenuBar(settingsService)`.
+7. `MainMenuBar` opens `IndexDirectoriesDialog` from the Index menu.
+8. `IndexDirectoriesDialog` lists current `indexedPaths` and lets the user add a
+   directory with `JFileChooser` starting from `lastChoosenPath`.
+9. `ContentPane` passes `SettingsService` to `FileTree`, and `FileTree` displays
+   directory names derived from `settings.indexedPaths()`.
+10. `CloseAppListener.windowClosing(...)` reads the current window `bounds`, combines
+   them with the previous `maximizedWindow`, `lastTreePosition`, `lastPlaylist`,
+   `indexedPaths`, and `lastChoosenPath` values, then calls
+   `settingsService.saveSettings(newSettings)`.
 
 ## Change Contracts
 
@@ -187,8 +217,8 @@ When changing this area, keep these rules:
 - Do not rely on entry order in `settings.properties`.
 - Treat `Settings` as a value object. Create a new record when changing a single
   field.
-- If `saveSettings(...)` should update in-memory state, assign `this.settings` only
-  after the file write succeeds.
+- Keep `saveSettings(...)` updating `this.settings` only after the file write
+  succeeds.
 - If adding I/O tests, consider injecting `Path` into the service. The current
   private `Paths.get("settings.properties")` makes test isolation harder.
 
@@ -205,26 +235,6 @@ Change these together:
 - This document - update the key table and application flow if the new field matters
   outside the mapper.
 
-### Refresh In-Memory State After Saving
-
-Current problem: `saveSettings(...)` does not change the `settings` field.
-
-Safe direction:
-
-```java
-public void saveSettings(Settings settings) throws IOException {
-    Properties props = settingsToPropertiesMapper.toProperties(settings);
-    Path path = getSettingsPath();
-    try (OutputStream out = Files.newOutputStream(path)) {
-        props.store(out, "Settings");
-    }
-    this.settings = settings;
-}
-```
-
-Updating the field after the `try` block means memory changes only after a
-successful file write.
-
 ### Make Testing Easier
 
 The current implementation always uses `settings.properties` from the process
@@ -237,7 +247,6 @@ while tests can provide a temporary file.
 - No tests cover file creation, empty files, invalid values, or saving.
 - `settingsToPropertiesMapper` is not `final`, even though it is a constructor
   dependency.
-- `saveSettings(...)` does not update in-memory state.
 - `getSettingsPath()` is private and hard-wired to a relative path.
 - `SettingsToPropertiesMapper.getBoolean(...)` catches `NumberFormatException`, but
   `Boolean.parseBoolean(...)` does not throw it. Invalid boolean text returns
@@ -256,12 +265,12 @@ directory. Its constructor accepts `SettingsToPropertiesMapper`, immediately cal
 `loadSettings()`, and may throw `IOException`.
 
 `SettingsService.getSettings()` returns the last loaded `Settings` object.
-`SettingsService.saveSettings(Settings)` maps the record to `Properties` and
-overwrites the file. Currently, writing the file does not update `this.settings`.
+`SettingsService.saveSettings(Settings)` maps the record to `Properties`,
+overwrites the file, and updates `this.settings` after a successful write.
 
 `Settings` is a record:
 windowX, windowY, windowWidth, windowHeight, maximizedWindow, lastTreePosition,
-lastPlaylist.
+lastPlaylist, indexedPaths, lastChoosenPath.
 
 Mapper keys:
 window.x=windowX default 100
@@ -271,10 +280,17 @@ window.height=windowHeight default 400
 window.maximize=maximizedWindow default false
 last.tree.position=lastTreePosition default ""
 last.playlist=lastPlaylist default ""
+indexed.paths=indexedPaths joined with File.pathSeparator default ""
+last.choosen.path=lastChoosenPath default empty path
 
 Integration:
 MusicManager creates SettingsService.
 MainWindow reads settings and applies window bounds.
+MainMenuBar receives SettingsService in its constructor and opens
+IndexDirectoriesDialog. IndexDirectoriesDialog shows indexedPaths and adds
+directories through JFileChooser starting from lastChoosenPath.
+ContentPane passes SettingsService to FileTree, and FileTree displays directory
+names from Settings.indexedPaths().
 CloseAppListener saves bounds when the application closes.
 
 When adding a settings field, change Settings, SettingsToPropertiesMapper, places
