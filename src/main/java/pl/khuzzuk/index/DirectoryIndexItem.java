@@ -1,15 +1,16 @@
 package pl.khuzzuk.index;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
 public class DirectoryIndexItem implements IndexItem {
-    private final String name;
+    private final Path path;
     private final List<IndexItem> children = new ArrayList<>();
     private IndexItem parent;
 
-    public DirectoryIndexItem(String name) {
-        this.name = name;
+    public DirectoryIndexItem(Path path) {
+        this.path = path.toAbsolutePath().normalize();
     }
 
     @Override
@@ -19,7 +20,13 @@ public class DirectoryIndexItem implements IndexItem {
 
     @Override
     public String getName() {
-        return name;
+        Path fileName = path.getFileName();
+        return fileName == null ? path.toString() : fileName.toString();
+    }
+
+    @Override
+    public Path getPath() {
+        return path;
     }
 
     @Override

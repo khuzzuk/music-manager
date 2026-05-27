@@ -29,7 +29,7 @@ class IndexServiceTest {
         assertEquals(
                 IndexItem.LINE_SEPARATOR
                         + IndexItem.DIRECTORY_PREFIX + IndexItem.ROOT_NAME + IndexItem.LINE_SEPARATOR
-                        + IndexItem.DIRECTORY_PREFIX + "music" + IndexItem.LINE_SEPARATOR,
+                        + IndexItem.DIRECTORY_PREFIX + escape(music.toAbsolutePath().normalize().toString()) + IndexItem.LINE_SEPARATOR,
                 Files.readString(indexPath));
     }
 
@@ -45,9 +45,9 @@ class IndexServiceTest {
         assertEquals(
                 IndexItem.LINE_SEPARATOR
                         + IndexItem.DIRECTORY_PREFIX + IndexItem.ROOT_NAME + IndexItem.LINE_SEPARATOR
-                        + IndexItem.DIRECTORY_PREFIX + "music" + IndexItem.LINE_SEPARATOR
-                        + IndexItem.DIRECTORY_PREFIX + "album" + IndexItem.LINE_SEPARATOR
-                        + "song.mp3" + IndexItem.LINE_SEPARATOR,
+                        + IndexItem.DIRECTORY_PREFIX + escape(music.toAbsolutePath().normalize().toString()) + IndexItem.LINE_SEPARATOR
+                        + IndexItem.DIRECTORY_PREFIX + escape(album.toAbsolutePath().normalize().toString()) + IndexItem.LINE_SEPARATOR
+                        + escape(album.resolve("song.mp3").toAbsolutePath().normalize().toString()) + IndexItem.LINE_SEPARATOR,
                 Files.readString(indexPath));
     }
 
@@ -95,11 +95,11 @@ class IndexServiceTest {
         Path indexPath = tempDir.resolve("index.dat");
 
         RootIndexItem root = new RootIndexItem();
-        DirectoryIndexItem existingMusic = new DirectoryIndexItem("music");
+        DirectoryIndexItem existingMusic = new DirectoryIndexItem(music);
         existingMusic.setParent(root);
-        DirectoryIndexItem existingAlbum = new DirectoryIndexItem("album");
+        DirectoryIndexItem existingAlbum = new DirectoryIndexItem(albumPath);
         existingAlbum.setParent(existingMusic);
-        SoundFileIndexItem existingFile = new SoundFileIndexItem("existing.mp3");
+        SoundFileIndexItem existingFile = new SoundFileIndexItem(albumPath.resolve("existing.mp3"));
         existingFile.setParent(existingAlbum);
         existingAlbum.addChildren(List.of(existingFile));
         existingMusic.addChildren(List.of(existingAlbum));
@@ -125,7 +125,7 @@ class IndexServiceTest {
         Path indexPath = tempDir.resolve("index.dat");
 
         RootIndexItem root = new RootIndexItem();
-        DirectoryIndexItem existingMusic = new DirectoryIndexItem("music");
+        DirectoryIndexItem existingMusic = new DirectoryIndexItem(music);
         existingMusic.setParent(root);
         root.addChildren(List.of(existingMusic));
 
@@ -147,11 +147,11 @@ class IndexServiceTest {
         Path indexPath = tempDir.resolve("index.dat");
 
         RootIndexItem root = new RootIndexItem();
-        DirectoryIndexItem existingMusic = new DirectoryIndexItem("music");
+        DirectoryIndexItem existingMusic = new DirectoryIndexItem(music);
         existingMusic.setParent(root);
-        DirectoryIndexItem album1 = new DirectoryIndexItem("album1");
+        DirectoryIndexItem album1 = new DirectoryIndexItem(music.resolve("album1"));
         album1.setParent(existingMusic);
-        DirectoryIndexItem album2 = new DirectoryIndexItem("album2");
+        DirectoryIndexItem album2 = new DirectoryIndexItem(album2Path);
         album2.setParent(existingMusic);
         existingMusic.addChildren(List.of(album1, album2));
         root.addChildren(List.of(existingMusic));
@@ -176,11 +176,11 @@ class IndexServiceTest {
         Path indexPath = tempDir.resolve("index.dat");
 
         RootIndexItem root = new RootIndexItem();
-        DirectoryIndexItem album1 = new DirectoryIndexItem("album1");
+        DirectoryIndexItem album1 = new DirectoryIndexItem(album1Path);
         album1.setParent(root);
-        DirectoryIndexItem album2 = new DirectoryIndexItem("album2");
+        DirectoryIndexItem album2 = new DirectoryIndexItem(album2Path);
         album2.setParent(root);
-        DirectoryIndexItem album3 = new DirectoryIndexItem("album3");
+        DirectoryIndexItem album3 = new DirectoryIndexItem(tempDir.resolve("album3"));
         album3.setParent(root);
         root.addChildren(List.of(album1, album2, album3));
 
@@ -202,13 +202,13 @@ class IndexServiceTest {
         Path indexPath = tempDir.resolve("index.dat");
 
         RootIndexItem root = new RootIndexItem();
-        DirectoryIndexItem existingMusic = new DirectoryIndexItem("music");
+        DirectoryIndexItem existingMusic = new DirectoryIndexItem(music);
         existingMusic.setParent(root);
-        DirectoryIndexItem album = new DirectoryIndexItem("album");
+        DirectoryIndexItem album = new DirectoryIndexItem(albumPath);
         album.setParent(existingMusic);
-        SoundFileIndexItem song1 = new SoundFileIndexItem("song1.mp3");
+        SoundFileIndexItem song1 = new SoundFileIndexItem(albumPath.resolve("song1.mp3"));
         song1.setParent(album);
-        SoundFileIndexItem song2 = new SoundFileIndexItem("song2.mp3");
+        SoundFileIndexItem song2 = new SoundFileIndexItem(albumPath.resolve("song2.mp3"));
         song2.setParent(album);
         album.addChildren(List.of(song1, song2));
         existingMusic.addChildren(List.of(album));
@@ -240,6 +240,32 @@ class IndexServiceTest {
     }
 
     @Test
+    void storesAbsoluteNormalizedPaths() throws IOException {
+        Path music = Files.createDirectory(tempDir.resolve("music"));
+        Path song = Files.createFile(music.resolve("song.mp3"));
+        Path indexPath = tempDir.resolve("index.dat");
+        Path relativeMusic = tempDir.relativize(music);
+
+        RootIndexItem root = new RootIndexItem();
+        new IndexService(indexPath).index(root, List.of(tempDir.resolve(relativeMusic).resolve(".")));
+
+        IndexItem directory = root.getChildren().getFirst();
+        IndexItem file = directory.getChildren().getFirst();
+        assertEquals(music.toAbsolutePath().normalize(), directory.getPath());
+        assertEquals(song.toAbsolutePath().normalize(), file.getPath());
+    }
+
+    @Test
+    void unreadablePathReturnsParentPath() {
+        Path musicPath = tempDir.resolve("music").toAbsolutePath().normalize();
+        DirectoryIndexItem music = new DirectoryIndexItem(musicPath);
+        UnreadableIndexItem unreadable = new UnreadableIndexItem("broken");
+        unreadable.setParent(music);
+
+        assertEquals(musicPath, unreadable.getPath());
+    }
+
+    @Test
     void hasChildrenMatchesChildrenList() throws IOException {
         Path music = Files.createDirectory(tempDir.resolve("music"));
         Files.createFile(music.resolve("song.mp3"));
@@ -254,5 +280,13 @@ class IndexServiceTest {
         assertTrue(directory.hasChildren());
         assertFalse(file.hasChildren());
         assertInstanceOf(SoundFileIndexItem.class, file);
+    }
+
+    private String escape(String value) {
+        return value
+                .replace("\\", "\\\\")
+                .replace("\r", "\\r")
+                .replace("\n", "\\n")
+                .replace("|", "\\|");
     }
 }

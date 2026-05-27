@@ -1,5 +1,6 @@
 package pl.khuzzuk.index;
 
+import java.nio.file.Path;
 import java.util.List;
 
 public interface IndexItem {
@@ -10,6 +11,8 @@ public interface IndexItem {
     boolean isDirectory();
 
     String getName();
+
+    Path getPath();
 
     List<IndexItem> getChildren();
 

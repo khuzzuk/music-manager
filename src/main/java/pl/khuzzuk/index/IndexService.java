@@ -25,8 +25,12 @@ public class IndexService {
      * Hard assumption: every path in {@code rootPaths} is a directory.
      */
     public RootIndexItem index(RootIndexItem root, List<Path> rootPaths) throws IOException {
-        List<Path> children = rootPaths.stream()
-                .filter(path -> rootPaths.stream().noneMatch(other -> isNestedPath(path, other)))
+        List<Path> normalizedRootPaths = rootPaths.stream()
+                .map(p -> p.toAbsolutePath().normalize())
+                .distinct()
+                .toList();
+        List<Path> children = normalizedRootPaths.stream()
+                .filter(path -> normalizedRootPaths.stream().noneMatch(other -> !path.equals(other) && path.startsWith(other)))
                 .sorted(Comparator.comparing(this::getName, String.CASE_INSENSITIVE_ORDER))
                 .toList();
         removeMissingChildren(root, children);
@@ -40,7 +44,7 @@ public class IndexService {
         DirectoryIndexItem directory = findDirectory(parent, getName(path));
         boolean createdDirectory = directory == null;
         if (directory == null) {
-            directory = new DirectoryIndexItem(getName(path));
+            directory = new DirectoryIndexItem(path);
             directory.setParent(parent);
             parent.getChildren().add(directory);
         }
@@ -49,6 +53,7 @@ public class IndexService {
             try (Stream<Path> children = Files.list(path)) {
                 DirectoryIndexItem targetDirectory = directory;
                 List<Path> childPaths = children
+                        .map(path1 -> path1.toAbsolutePath().normalize())
                         .sorted(Comparator.comparing(this::getName, String.CASE_INSENSITIVE_ORDER))
                         .toList();
                 removeMissingChildren(targetDirectory, childPaths);
@@ -81,7 +86,7 @@ public class IndexService {
             }
 
             if (findChild(parent, getName(path), SoundFileIndexItem.class) == null) {
-                SoundFileIndexItem item = new SoundFileIndexItem(getName(path));
+                SoundFileIndexItem item = new SoundFileIndexItem(path);
                 item.setParent(parent);
                 parent.getChildren().add(item);
             }
@@ -112,13 +117,6 @@ public class IndexService {
         item.getChildren().addAll(sortedChildren);
     }
 
-    private boolean isNestedPath(Path path, Path possibleParent) {
-        Path normalizedPath = path.toAbsolutePath().normalize();
-        Path normalizedParent = possibleParent.toAbsolutePath().normalize();
-        return !normalizedPath.equals(normalizedParent)
-                && normalizedPath.startsWith(normalizedParent);
-    }
-
     private String getName(Path path) {
         Path fileName = path.getFileName();
         return fileName == null ? path.toString() : fileName.toString();
@@ -143,7 +141,7 @@ public class IndexService {
             index.append(IndexItem.DIRECTORY_PREFIX);
         }
 
-        index.append(escape(item.getName())).append(System.lineSeparator());
+        index.append(escape(getPersistentValue(item))).append(System.lineSeparator());
         if (!item.hasChildren()) {
             return;
         }
@@ -157,5 +155,9 @@ public class IndexService {
                 .replace("\r", "\\r")
                 .replace("\n", "\\n")
                 .replace("|", "\\|");
+    }
+
+    private String getPersistentValue(IndexItem item) {
+        return item.isRoot() ? item.getName() : item.getPath().toString();
     }
 }

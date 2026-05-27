@@ -1,5 +1,6 @@
 package pl.khuzzuk.index;
 
+import java.nio.file.Path;
 import java.util.List;
 
 public class UnreadableIndexItem implements IndexItem {
@@ -18,6 +19,11 @@ public class UnreadableIndexItem implements IndexItem {
     @Override
     public String getName() {
         return name;
+    }
+
+    @Override
+    public Path getPath() {
+        return parent == null ? null : parent.getPath();
     }
 
     @Override

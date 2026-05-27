@@ -64,9 +64,10 @@ Current behavior:
 
 - declares `throws IOException` for `index.dat` write failures;
 - mutates and returns the supplied `RootIndexItem`;
-- normalizes root paths with `toAbsolutePath().normalize()` for filtering;
-- removes any root path that is nested under another root path from the same input
-  list;
+- maps root paths through `toAbsolutePath().normalize()`;
+- removes exact duplicate normalized root paths;
+- removes any normalized root path that is nested under another normalized root
+  path from the same input list;
 - sorts the remaining root paths by display name with
   `String.CASE_INSENSITIVE_ORDER`;
 - removes existing root children that are not present in the current filtered
@@ -83,16 +84,16 @@ Current behavior:
 
 ## Internal Flow
 
-Before recursive scanning starts, `index(RootIndexItem, List<Path>)` filters
-redundant root paths inline in its stream pipeline. If the input contains both
-`C:\Music` and
+Before recursive scanning starts, `index(RootIndexItem, List<Path>)` maps every
+root path through `toAbsolutePath().normalize()`, removes exact duplicates, and
+filters redundant root paths inline in its stream pipeline. If the input contains
+both `C:\Music` and
 `C:\Music\Rock`, only `C:\Music` remains as a direct child of `RootIndexItem`;
 `Rock` can still appear inside the scanned tree under `Music`.
 
-Filtering delegates each pairwise comparison to `isNestedPath(Path, Path)`, which
-uses normalized absolute paths for comparison but keeps the original `Path` object
-for scanning and display-name calculation. It does not call `toRealPath()`, so
-filtering does not require the path to exist or be readable.
+Filtering compares normalized absolute paths directly with `Path.startsWith(...)`.
+It does not call `toRealPath()`, so filtering does not require the path to exist or
+be readable.
 
 `mergeDirectory(IndexItem parent, Path path)` is the recursive implementation for
 directory nodes. It either finds an existing `DirectoryIndexItem` with the same
@@ -123,47 +124,47 @@ After the tree is built, `saveIndex(IndexItem root)` writes the configured index
 path in UTF-8.
 The current format is one line per persisted item, in pre-order traversal order.
 Directories are marked with a compact `D|` prefix, while sound files are written
-as bare escaped names. Empty lines are structural: the leading empty line appears
-before root, and each later empty line closes the current directory on the reader's
-stack.
+as bare escaped full paths. The leading empty line appears before root. Other
+empty lines are ignored by the current reader.
 
 ```text
 
 D|root
-D|escaped-directory-name
-escaped-file-name
+D|escaped-normalized-directory-path
+escaped-normalized-file-path
 
 ```
 
 `RootIndexItem` is persisted like a directory as `D|root`, with one empty line
 before the root line. The file does not include an explicit depth value; hierarchy
-is derived from entry order and directory-closing empty lines. `UnreadableIndexItem`
-nodes are temporary in-memory nodes and are not written to `index.dat`. There is no
-`UNKNOWN` marker in the persisted format; any future non-directory `IndexItem`
-implementation that is not `UnreadableIndexItem` would currently be written as a
-bare escaped name. Names escape backslash, carriage return, newline, and `|`.
+is reconstructed from persisted full paths and their parent paths.
+`UnreadableIndexItem` nodes are temporary in-memory nodes and are not written to
+`index.dat`. There is no `UNKNOWN` marker in the persisted format; any future
+non-directory `IndexItem` implementation that is not `UnreadableIndexItem` would
+currently be written as a bare escaped path. Persisted values escape backslash,
+carriage return, newline, and `|`.
 
 ### IndexReaderService
 
 ```java
-public IndexReaderService()
 public IndexReaderService(Path indexPath)
 public RootIndexItem read() throws IOException
 ```
 
-The no-arg constructor reads `index.dat` from the process working directory. The
-`Path` constructor injects the input file location. `read()` reads UTF-8 lines,
-ignores leading empty lines before root, expects the first non-empty entry to be
-`D|root`, and reconstructs the tree with parent links.
+The `Path` constructor injects the input file location. `read()` reads UTF-8
+lines, ignores empty lines, expects the first non-empty entry to be `D|root`, and
+reconstructs the tree with parent links by matching each item path to a persisted
+directory parent path.
 
 Reader parsing rules:
 
-- `D|name` creates a directory node and pushes it onto the current directory stack;
-- the first `D|root` creates the returned `RootIndexItem`;
-- a bare escaped line creates a `SoundFileIndexItem` under the current directory;
-- an empty line pops one directory from the stack;
-- a bare file line without a current directory, a non-root first directory, or an
-  invalid trailing escape throws `IOException`.
+- `D|root` creates the returned `RootIndexItem`;
+- `D|path` creates a `DirectoryIndexItem` from the full path;
+- a bare escaped path creates a `SoundFileIndexItem`;
+- an item's parent is the existing directory whose path equals the item's
+  `Path.getParent()`, or root when no persisted parent directory exists;
+- a bare file line before root, a non-root first directory, or an invalid trailing
+  escape throws `IOException`.
 
 ## IndexItem Contract
 
@@ -172,6 +173,7 @@ Reader parsing rules:
 ```java
 boolean isDirectory();
 String getName();
+Path getPath();
 List<IndexItem> getChildren();
 boolean hasChildren();
 IndexItem getParent();
@@ -182,6 +184,11 @@ boolean isRoot();
 `isRoot()` is implemented explicitly by each node type. Only `RootIndexItem`
 returns `true`.
 
+`IndexService` creates directory and sound-file items with absolute normalized
+paths. `RootIndexItem.getPath()` returns `null`. `UnreadableIndexItem.getPath()`
+returns its parent path, because unreadable nodes are temporary placeholders and do
+not persist their own readable filesystem path.
+
 ## Implementations
 
 ### RootIndexItem
@@ -191,6 +198,7 @@ Represents the virtual root of an index tree.
 Behavior:
 
 - `getName()` returns `"root"`;
+- `getPath()` returns `null`;
 - `isRoot()` returns `true`;
 - `isDirectory()` returns `true` because the root is a container node;
 - `getParent()` returns `null`;
@@ -209,6 +217,9 @@ Behavior:
 
 - `isDirectory()` returns `true`;
 - `isRoot()` returns `false`;
+- `getPath()` returns the absolute normalized directory path when created by
+  `IndexService`; manually created nodes derive it from parent path and name when
+  possible;
 - `getChildren()` returns the mutable backing `List<IndexItem>`;
 - `hasChildren()` returns `true` when the backing child list is not empty;
 - children are added by package-private `addChildren(List<IndexItem>)`;
@@ -223,6 +234,9 @@ Behavior:
 
 - `isDirectory()` returns `false`;
 - `isRoot()` returns `false`;
+- `getPath()` returns the absolute normalized file path when created by
+  `IndexService`; manually created nodes derive it from parent path and name when
+  possible;
 - `getChildren()` returns `List.of()`;
 - `hasChildren()` returns `false`;
 - `parent` is set by `IndexService`;
@@ -237,6 +251,7 @@ Behavior:
 
 - `isDirectory()` always returns `false`;
 - `isRoot()` returns `false`;
+- `getPath()` returns the parent path;
 - `getChildren()` returns `List.of()`;
 - `hasChildren()` returns `false`;
 - `parent` is set by `IndexService`;
@@ -323,9 +338,8 @@ When changing this area, keep these rules:
 
 Existing focused tests in `IndexServiceTest` cover:
 
-- writing root as `D|root` with a leading empty line and directory-closing empty
-  lines;
-- writing directories with `D|` and files as bare escaped names;
+- writing root as `D|root` with a leading empty line;
+- writing directories with `D|` and files as bare escaped full paths;
 - not writing explicit depth values;
 - case-insensitive sorting of root paths and children;
 - filtering nested root paths;
@@ -371,31 +385,36 @@ writing the configured index file. Public `rootPaths` are assumed to be
 directories.
 
 The supplied root is a virtual `RootIndexItem` with name "root". Every path passed
-to `index(RootIndexItem, List<Path>)` is first compared with other input paths using
-`toAbsolutePath().normalize()`. If one input path is nested under another input
-path, the nested path is skipped as a direct root child. Remaining paths are sorted
-by display name and merged with existing same-name directory nodes where possible.
+to `index(RootIndexItem, List<Path>)` is first mapped through
+`toAbsolutePath().normalize()`. Exact duplicate normalized paths are removed. If
+one normalized input path is nested under another input path, the nested path is
+skipped as a direct root child. Remaining paths are sorted by display name and
+merged with existing same-name directory nodes where possible.
 Missing directory and sound-file nodes are added with parent links; stale nodes
 not present in the current root paths or scanned directory listings are removed.
+Directory and sound-file items created by `IndexService` expose absolute normalized
+paths through `getPath()`. `UnreadableIndexItem.getPath()` returns its parent path.
 After building the tree, IndexService writes `index.dat` as UTF-8 text lines
 without explicit depth. Directories, including root, are written as
-`D|escaped-name`; sound files are written as bare escaped names. Root is written as
-`D|root` and is preceded by one empty line. Empty lines after directory contents
-close the current directory for the reader. Unreadable nodes are not persisted.
+`D|escaped-normalized-path`; sound files are written as bare escaped normalized
+paths. Root is written as `D|root` and is preceded by one empty line. Unreadable
+nodes are not persisted.
 
-`IndexReaderService` has a no-arg constructor for `index.dat`, a
-`IndexReaderService(Path indexPath)` constructor, and `read() throws IOException`.
-It reads `D|...` directory lines, bare sound-file lines, and empty-line directory
-closures into a `RootIndexItem` tree with parent links.
+`IndexReaderService` has an `IndexReaderService(Path indexPath)` constructor and
+`read() throws IOException`. It reads `D|...` directory path lines and bare
+sound-file path lines into a `RootIndexItem` tree with parent links.
 
 Node interface:
-IndexItem has isDirectory(), getName(), getChildren(), hasChildren(), getParent(),
-setParent(), and isRoot(). isRoot() is explicit: only RootIndexItem returns true.
+IndexItem has isDirectory(), getName(), getPath(), getChildren(), hasChildren(),
+getParent(), setParent(), and isRoot(). isRoot() is explicit: only RootIndexItem
+returns true.
 
 Implementations:
 - RootIndexItem: virtual container, name "root", isRoot true, mutable children.
-- DirectoryIndexItem: readable directory, isDirectory true, mutable children.
-- SoundFileIndexItem: non-directory leaf, isDirectory false, empty children.
+- DirectoryIndexItem: readable directory created from a Path, isDirectory true,
+  mutable children, getName() derived from path file name.
+- SoundFileIndexItem: non-directory leaf created from a Path, isDirectory false,
+  empty children, getName() derived from path file name.
 - UnreadableIndexItem: leaf used when reading/listing a path fails.
 
 Traversal:

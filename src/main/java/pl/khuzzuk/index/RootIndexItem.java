@@ -1,5 +1,6 @@
 package pl.khuzzuk.index;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -14,6 +15,11 @@ public class RootIndexItem implements IndexItem {
     @Override
     public String getName() {
         return IndexItem.ROOT_NAME;
+    }
+
+    @Override
+    public Path getPath() {
+        return null;
     }
 
     @Override
