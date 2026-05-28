@@ -1,7 +1,9 @@
 package pl.khuzzuk.index;
 
 import pl.khuzzuk.metadata.MetadataReaderService;
+import pl.khuzzuk.metadata.MetadataWriterService;
 import pl.khuzzuk.metadata.SoundFileMetadata;
+import pl.khuzzuk.metadata.DocumentMapper;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -391,47 +393,12 @@ class IndexServiceTest {
     }
 
     @Test
-    void readsMetadataWhenIndexingSoundFiles() throws IOException {
+    void writesMetadataWhenIndexingSoundFiles() throws IOException {
         Path music = Files.createDirectory(tempDir.resolve("music"));
         Path song = Files.createFile(music.resolve("song.mp3"));
         Path indexPath = tempDir.resolve("index.dat");
-        SoundFileMetadata metadata = new SoundFileMetadata(
-                "MPEG",
-                song.toAbsolutePath().normalize().toString(),
-                "song.mp3",
-                null,
-                "Song Title",
-                8,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
+        SoundFileMetadata metadata = SoundFileMetadata.empty(song);
+        AtomicReference<SoundFileMetadata> writtenMetadata = new AtomicReference<>();
         MetadataReaderService metadataReaderService = new MetadataReaderService() {
             @Override
             public SoundFileMetadata readMetadata(Path path) {
@@ -439,14 +406,18 @@ class IndexServiceTest {
                 return metadata;
             }
         };
-        RootIndexItem root = new RootIndexItem();
+        MetadataWriterService metadataWriterService = new MetadataWriterService(
+                tempDir.resolve("metadata-index"),
+                new DocumentMapper()) {
+            @Override
+            public void writeMetadata(SoundFileMetadata metadata) {
+                writtenMetadata.set(metadata);
+            }
+        };
 
-        new IndexService(indexPath, metadataReaderService).index(root, List.of(music));
+        new IndexService(indexPath, metadataReaderService, metadataWriterService).index(new RootIndexItem(), List.of(music));
 
-        SoundFileIndexItem indexedSong = assertInstanceOf(
-                SoundFileIndexItem.class,
-                root.getChildren().getFirst().getChildren().getFirst());
-        assertSame(metadata, indexedSong.getMetadata());
+        assertSame(metadata, writtenMetadata.get());
     }
 
     @Test
@@ -472,6 +443,9 @@ class IndexServiceTest {
     }
 
     private IndexService indexService(Path indexPath) {
-        return new IndexService(indexPath, new MetadataReaderService());
+        return new IndexService(
+                indexPath,
+                new MetadataReaderService(),
+                new MetadataWriterService(tempDir.resolve("metadata-index"), new DocumentMapper()));
     }
 }

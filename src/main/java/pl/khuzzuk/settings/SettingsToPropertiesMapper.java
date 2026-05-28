@@ -1,5 +1,7 @@
 package pl.khuzzuk.settings;
 
+import pl.khuzzuk.metadata.Tag;
+
 import java.io.File;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -10,13 +12,13 @@ import java.util.stream.Collectors;
 
 public class SettingsToPropertiesMapper {
     public static final List<TrackColumn> DEFAULT_TRACK_COLUMNS = List.of(
-            new TrackColumn("title", 220),
-            new TrackColumn("album", 180),
-            new TrackColumn("composer", 160),
-            new TrackColumn("rating", 70),
-            new TrackColumn("mood", 120),
-            new TrackColumn("movement", 120),
-            new TrackColumn("occasion", 120));
+            new TrackColumn(Tag.TITLE, 220),
+            new TrackColumn(Tag.ALBUM, 180),
+            new TrackColumn(Tag.COMPOSER, 160),
+            new TrackColumn(Tag.RATING, 70),
+            new TrackColumn(Tag.MOOD, 120),
+            new TrackColumn(Tag.MOVEMENT, 120),
+            new TrackColumn(Tag.OCCASION, 120));
     private static final String WINDOW_X_PROPERTY = "window.x";
     private static final String WINDOW_Y_PROPERTY = "window.y";
     private static final String WINDOW_WIDTH_PROPERTY = "window.width";
@@ -57,7 +59,7 @@ public class SettingsToPropertiesMapper {
                 .collect(Collectors.joining(File.pathSeparator)));
         prop.setProperty(LAST_CHOOSEN_PATH_PROPERTY, settings.lastChoosenPath().toString());
         prop.setProperty(TRACK_COLUMNS_PROPERTY, settings.trackColumns().stream()
-                .map(column -> column.name() + ":" + column.width())
+                .map(column -> column.tag().settingsName() + ":" + column.width())
                 .collect(Collectors.joining(";")));
         return prop;
     }
@@ -81,16 +83,16 @@ public class SettingsToPropertiesMapper {
 
         List<TrackColumn> trackColumns = Arrays.stream(columns.split(";"))
                 .map(SettingsToPropertiesMapper::toTrackColumn)
-                .filter(column -> !column.name().isBlank())
+                .filter(column -> column.tag() != null)
                 .toList();
         return trackColumns.isEmpty() ? DEFAULT_TRACK_COLUMNS : trackColumns;
     }
 
     private static TrackColumn toTrackColumn(String value) {
         String[] parts = value.split(":", 2);
-        String name = parts[0].trim();
+        Tag tag = Tag.fromSettingsName(parts[0]);
         int width = parts.length == 2 ? getInt(parts[1].trim(), 120) : 120;
-        return new TrackColumn(name, width);
+        return new TrackColumn(tag, width);
     }
 
     private static int getInt(String prop, int defaultValue) {

@@ -5,6 +5,7 @@ build/
 !**/src/test/**/build/
 .kotlin
 index.dat
+metadata-index/
 
 ### IntelliJ IDEA ###
 .idea/modules.xml

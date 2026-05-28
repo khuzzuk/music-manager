@@ -11,6 +11,17 @@ implementations, error handling, and change contracts.
 - `src/main/java/pl/khuzzuk/index/IndexReaderService.java` - reads `index.dat`
   and reconstructs a `RootIndexItem` tree.
 - `index.dat` - generated index output written by `IndexService.index(...)`.
+- `metadata-index/` - generated Lucene metadata index written by
+  `MetadataWriterService`.
+- `src/main/java/pl/khuzzuk/metadata/MetadataReaderService.java` - reads audio
+  metadata from files.
+- `src/main/java/pl/khuzzuk/metadata/SoundFileMetadataMapper.java` - maps
+  jaudiotagger `AudioFile` objects to `SoundFileMetadata`; mapped file `path` and
+  `format` are expected to be present.
+- `src/main/java/pl/khuzzuk/metadata/MoodConverter.java` - resolves mood values,
+  including fallback values stored in comment frames.
+- `src/main/java/pl/khuzzuk/metadata/MetadataWriterService.java` - writes
+  metadata documents into the Lucene index.
 - `src/main/java/pl/khuzzuk/index/IndexItem.java` - common tree node interface.
 - `src/main/java/pl/khuzzuk/index/RootIndexItem.java` - virtual root node named
   `root`.
@@ -29,9 +40,11 @@ implementations, error handling, and change contracts.
 `IndexService` scans filesystem paths, returns a tree of `IndexItem` nodes under a
 virtual `RootIndexItem`, and writes the resulting tree to `index.dat`.
 `IndexReaderService` reads `index.dat` back into the same tree model. The indexing
-package is responsible for filesystem traversal, index persistence, and attaching
-metadata read by `MetadataReaderService` to sound-file nodes. It does not build
-Swing tree nodes or connect the index to the player.
+package is responsible for filesystem traversal and index persistence. During
+indexing, `IndexService` reads metadata for supported sound files through
+`MetadataReaderService` and writes it to a separate Lucene metadata index through
+`MetadataWriterService`. It does not attach metadata to `SoundFileIndexItem`, build
+Swing tree nodes, or connect the index to the player.
 
 The current implementation treats non-directory paths as `SoundFileIndexItem`
 only when their extension is listed in `SoundFileType.EXTENSIONS`.
@@ -41,13 +54,16 @@ only when their extension is listed in `SoundFileType.EXTENSIONS`.
 ### Constructors
 
 ```java
-public IndexService(Path indexPath, MetadataReaderService metadataReaderService)
+public IndexService(
+        Path indexPath,
+        MetadataReaderService metadataReaderService,
+        MetadataWriterService metadataWriterService)
 public void addIndexListener(Consumer<RootIndexItem> listener)
 public void removeIndexListener(Consumer<RootIndexItem> listener)
 ```
 
-The constructor injects the output file location and the metadata reader used
-when creating sound-file nodes.
+The constructor injects the output file location, metadata reader, and Lucene
+metadata writer.
 Listeners are notified with the supplied `RootIndexItem` after a successful
 `index(...)` call and after the index has been written.
 
@@ -116,11 +132,12 @@ Current flow:
 6. Directory children recurse through `mergeDirectory(...)`.
 7. Supported non-directory children create a `SoundFileIndexItem` only when a
    same-name `SoundFileIndexItem` is not already present under the parent.
-   `MetadataReaderService.readMetadata(path)` is called for new sound-file nodes;
-   metadata read failures keep the file indexed with empty metadata.
-8. After merging a directory, its children are sorted by
+8. Supported non-directory children read metadata through `MetadataReaderService`
+   and write it through `MetadataWriterService`. Metadata read/write failures are
+   best-effort and do not stop filesystem indexing.
+9. After merging a directory, its children are sorted by
    `IndexItem.getName()` with `String.CASE_INSENSITIVE_ORDER`.
-9. If a newly-created directory cannot be listed because of `IOException` or
+10. If a newly-created directory cannot be listed because of `IOException` or
    `SecurityException`, the new directory node is replaced with an
    `UnreadableIndexItem`. If an existing directory cannot be listed, the existing
    tree node is kept as-is.
@@ -155,25 +172,23 @@ carriage return, newline, and `|`.
 ### IndexReaderService
 
 ```java
-public IndexReaderService(Path indexPath, MetadataReaderService metadataReaderService)
+public IndexReaderService(Path indexPath)
 public RootIndexItem read() throws IOException
 public RootIndexItem getCurrentRootIndexItem()
 ```
 
-The constructor injects the input file location and metadata reader. `read()`
-reads UTF-8 lines, ignores empty lines, expects the first non-empty entry to be
-`D|root`, reconstructs the tree with parent links by matching each item path to a
-persisted directory parent path, reads metadata for sound-file entries, stores the
-reconstructed root as the current root, and returns it. `getCurrentRootIndexItem()`
-returns the most recently read root, or an empty `RootIndexItem` before the first
-successful read.
+The constructor injects the input file location. `read()` reads UTF-8 lines,
+ignores empty lines, expects the first non-empty entry to be `D|root`,
+reconstructs the tree with parent links by matching each item path to a persisted
+directory parent path, stores the reconstructed root as the current root, and
+returns it. `getCurrentRootIndexItem()` returns the most recently read root, or an
+empty `RootIndexItem` before the first successful read.
 
 Reader parsing rules:
 
 - `D|root` creates the returned `RootIndexItem`;
 - `D|path` creates a `DirectoryIndexItem` from the full path;
-- a bare escaped path creates a `SoundFileIndexItem` with metadata read through
-  `MetadataReaderService`, or empty metadata when reading fails;
+- a bare escaped path creates a `SoundFileIndexItem`;
 - an item's parent is the existing directory whose path equals the item's
   `Path.getParent()`, or root when no persisted parent directory exists;
 - a bare file line before root, a non-root first directory, or an invalid trailing
@@ -254,9 +269,7 @@ Behavior:
 - `hasChildren()` returns `false`;
 - `parent` is set by `IndexService`;
 - `IndexService` creates this node only for files with extensions listed in
-  `SoundFileType.EXTENSIONS`;
-- `getMetadata()` returns `SoundFileMetadata` read during indexing or
-  `IndexReaderService.read()`, or empty metadata when metadata reading failed.
+  `SoundFileType.EXTENSIONS`.
 
 ### UnreadableIndexItem
 
@@ -310,8 +323,8 @@ When changing this area, keep these rules:
   `RootIndexItem`, `DirectoryIndexItem`, `SoundFileIndexItem`, and
   `UnreadableIndexItem`.
 - If supported sound-file extensions change, update `SoundFileType.EXTENSIONS`.
-- Keep `SoundFileIndexItem` metadata as indexing-owned `SoundFileMetadata`;
-  playback-specific state belongs outside the indexing package.
+- Do not attach audio metadata to `SoundFileIndexItem`; indexing metadata belongs
+  in the separate Lucene metadata index owned by `MetadataWriterService`.
 - Preserve parent links unless the caller contract is explicitly changed. Direct
   children of `RootIndexItem` should use that root as their parent.
 - Preserve synchronization semantics for `index(RootIndexItem, List<Path>)`:
@@ -339,8 +352,8 @@ When changing this area, keep these rules:
 - There are no tests for unreadable directory behavior because reliable permission
   manipulation is platform-dependent.
 - `RootIndexItem.getChildren()` exposes a mutable list.
-- `IndexService` validates files by extension only. Metadata read failures do not
-  reject a supported file; the node is kept with empty metadata.
+- `IndexService` validates files by extension only. Metadata read/write failures
+  do not reject a supported file; the filesystem node is still indexed.
 - `DirectoryIndexItem.getChildren()` exposes a mutable list.
 - `UnreadableIndexItem` does not store the exception or reason why reading failed.
 - Symbolic links are not handled specially. `Files.isDirectory(path)` follows links
@@ -390,8 +403,8 @@ Paste this block when Codex needs to work on indexing:
 ```text
 The Music Manager project has `pl.khuzzuk.index.IndexService`.
 `IndexService` has an `IndexService(Path indexPath, MetadataReaderService
-metadataReaderService)` constructor for injecting the output file and metadata
-reader.
+metadataReaderService, MetadataWriterService metadataWriterService)` constructor
+for injecting the output file and metadata indexing services.
 `IndexService.index(RootIndexItem, List<Path>)` is the public indexing entry point.
 Callers must create and pass the `RootIndexItem`; the service mutates and returns
 that supplied root, synchronizing it with current filesystem entries by adding
@@ -409,20 +422,16 @@ Missing directory and supported sound-file nodes are added with parent links;
 stale nodes not present in the current root paths or scanned indexable directory
 listings are removed.
 Directory and sound-file items created by `IndexService` expose absolute normalized
-paths through `getPath()`. New sound-file items also hold `SoundFileMetadata`
-read through `MetadataReaderService`, falling back to empty metadata on read
-failure. `UnreadableIndexItem.getPath()` returns its parent path.
+paths through `getPath()`. `UnreadableIndexItem.getPath()` returns its parent path.
 After building the tree, IndexService writes `index.dat` as UTF-8 text lines
 without explicit depth. Directories, including root, are written as
 `D|escaped-normalized-path`; sound files are written as bare escaped normalized
 paths. Root is written as `D|root` and is preceded by one empty line. Unreadable
 nodes are not persisted.
 
-`IndexReaderService` has an `IndexReaderService(Path indexPath,
-MetadataReaderService metadataReaderService)` constructor and `read() throws
-IOException`. It reads `D|...` directory path lines and bare sound-file path lines
-into a `RootIndexItem` tree with parent links and metadata attached to sound-file
-nodes.
+`IndexReaderService` has an `IndexReaderService(Path indexPath)` constructor and
+`read() throws IOException`. It reads `D|...` directory path lines and bare
+sound-file path lines into a `RootIndexItem` tree with parent links.
 
 Node interface:
 IndexItem has isDirectory(), getName(), getPath(), getChildren(), hasChildren(),
@@ -434,7 +443,7 @@ Implementations:
 - DirectoryIndexItem: readable directory created from a Path, isDirectory true,
   mutable children, getName() derived from path file name.
 - SoundFileIndexItem: non-directory leaf created from a Path, isDirectory false,
-  empty children, getName() derived from path file name, metadata attached.
+  empty children, getName() derived from path file name.
 - UnreadableIndexItem: leaf used when reading/listing a path fails.
 
 Traversal:

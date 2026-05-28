@@ -1,5 +1,7 @@
 package pl.khuzzuk.settings;
 
+import pl.khuzzuk.metadata.Tag;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -17,9 +19,9 @@ class SettingsToPropertiesMapperTest {
 
         assertEquals(
                 List.of(
-                        new TrackColumn("title", 250),
-                        new TrackColumn("album", 180),
-                        new TrackColumn("rating", 70)),
+                        new TrackColumn(Tag.TITLE, 250),
+                        new TrackColumn(Tag.ALBUM, 180),
+                        new TrackColumn(Tag.RATING, 70)),
                 settings.trackColumns());
     }
 
@@ -42,7 +44,7 @@ class SettingsToPropertiesMapperTest {
                 "",
                 List.of(),
                 null,
-                List.of(new TrackColumn("mood", 140), new TrackColumn("occasion", 160)));
+                List.of(new TrackColumn(Tag.MOOD, 140), new TrackColumn(Tag.OCCASION, 160)));
 
         Properties properties = new SettingsToPropertiesMapper().toProperties(settings);
 

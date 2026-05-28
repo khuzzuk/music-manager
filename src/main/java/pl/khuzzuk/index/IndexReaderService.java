@@ -1,8 +1,5 @@
 package pl.khuzzuk.index;
 
-import pl.khuzzuk.metadata.MetadataReaderService;
-import pl.khuzzuk.metadata.SoundFileMetadata;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -12,12 +9,10 @@ import java.util.Objects;
 
 public class IndexReaderService {
     private final Path indexPath;
-    private final MetadataReaderService metadataReaderService;
     private RootIndexItem currentRootIndexItem = new RootIndexItem();
 
-    public IndexReaderService(Path indexPath, MetadataReaderService metadataReaderService) {
+    public IndexReaderService(Path indexPath) {
         this.indexPath = indexPath;
-        this.metadataReaderService = metadataReaderService;
     }
 
     public RootIndexItem read() throws IOException {
@@ -42,7 +37,7 @@ public class IndexReaderService {
             }
 
             Path path = Path.of(unescape(line));
-            SoundFileIndexItem item = new SoundFileIndexItem(path, readMetadata(path));
+            SoundFileIndexItem item = new SoundFileIndexItem(path);
             IndexItem parent = findParent(root, item.getPath());
             item.setParent(parent);
             parent.getChildren().add(item);
@@ -54,14 +49,6 @@ public class IndexReaderService {
 
     public RootIndexItem getCurrentRootIndexItem() {
         return currentRootIndexItem;
-    }
-
-    private SoundFileMetadata readMetadata(Path path) {
-        try {
-            return metadataReaderService.readMetadata(path);
-        } catch (IOException | SecurityException e) {
-            return SoundFileMetadata.empty(path);
-        }
     }
 
     private IndexItem createDirectory(String value, RootIndexItem root) throws IOException {

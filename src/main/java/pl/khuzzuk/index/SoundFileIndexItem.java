@@ -1,22 +1,14 @@
 package pl.khuzzuk.index;
 
-import pl.khuzzuk.metadata.SoundFileMetadata;
-
 import java.nio.file.Path;
 import java.util.List;
 
 public class SoundFileIndexItem implements IndexItem {
     private final Path path;
-    private final SoundFileMetadata metadata;
     private IndexItem parent;
 
     public SoundFileIndexItem(Path path) {
-        this(path, SoundFileMetadata.empty(path));
-    }
-
-    public SoundFileIndexItem(Path path, SoundFileMetadata metadata) {
         this.path = path.toAbsolutePath().normalize();
-        this.metadata = metadata == null ? SoundFileMetadata.empty(path) : metadata;
     }
 
     @Override
@@ -33,10 +25,6 @@ public class SoundFileIndexItem implements IndexItem {
     @Override
     public Path getPath() {
         return path;
-    }
-
-    public SoundFileMetadata getMetadata() {
-        return metadata;
     }
 
     @Override

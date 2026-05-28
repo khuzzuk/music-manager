@@ -3,6 +3,10 @@
 All `Service` instances should be created in `MusicManager.initComponents()` and
 passed to dependent classes through constructors.
 
+Object-to-object mapping logic should live in a dedicated Mapper class. For
+example, mapping `SoundFileMetadata` to a Lucene `Document` should be handled by a
+mapper such as `DocumentMapper`, not inline in a service.
+
 For documentation work, use:
 
 - `docs/codex-documentation-prompt.md`

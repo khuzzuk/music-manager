@@ -3,7 +3,11 @@ package pl.khuzzuk;
 import pl.khuzzuk.initialization.LoadingScreen;
 import pl.khuzzuk.index.IndexReaderService;
 import pl.khuzzuk.index.IndexService;
+import pl.khuzzuk.metadata.DocumentMapper;
 import pl.khuzzuk.metadata.MetadataReaderService;
+import pl.khuzzuk.metadata.MetadataWriterService;
+import pl.khuzzuk.metadata.MoodConverter;
+import pl.khuzzuk.metadata.SoundFileMetadataMapper;
 import pl.khuzzuk.settings.SettingsService;
 import pl.khuzzuk.settings.SettingsToPropertiesMapper;
 import pl.khuzzuk.ui.MainWindow;
@@ -16,8 +20,13 @@ import java.nio.file.Path;
 
 public class MusicManager {
     private static final Path INDEX_PATH = Path.of("index.dat");
+    private static final Path METADATA_INDEX_PATH = Path.of("metadata-index");
     public static SettingsService settingsService;
+    public static MoodConverter moodConverter;
+    public static SoundFileMetadataMapper soundFileMetadataMapper;
     public static MetadataReaderService metadataReaderService;
+    public static MetadataWriterService metadataWriterService;
+    public static DocumentMapper documentMapper;
     public static IndexService indexService;
     public static IndexReaderService indexReaderService;
 
@@ -32,10 +41,14 @@ public class MusicManager {
 
         try {
             settingsService = new SettingsService(new SettingsToPropertiesMapper());
-            metadataReaderService = new MetadataReaderService();
+            moodConverter = new MoodConverter();
+            soundFileMetadataMapper = new SoundFileMetadataMapper(moodConverter);
+            metadataReaderService = new MetadataReaderService(soundFileMetadataMapper);
+            documentMapper = new DocumentMapper();
+            metadataWriterService = new MetadataWriterService(METADATA_INDEX_PATH, documentMapper);
             createIndexFileIfMissing();
-            indexService = new IndexService(INDEX_PATH, metadataReaderService);
-            indexReaderService = new IndexReaderService(INDEX_PATH, metadataReaderService);
+            indexService = new IndexService(INDEX_PATH, metadataReaderService, metadataWriterService);
+            indexReaderService = new IndexReaderService(INDEX_PATH);
             indexReaderService.read();
         } catch (IOException e) {
             JOptionPane.showMessageDialog(
@@ -50,7 +63,7 @@ public class MusicManager {
     }
 
     private static void showMainWindow() {
-        MainWindow mainWindow = new MainWindow(settingsService, indexService, indexReaderService);
+        MainWindow mainWindow = new MainWindow(settingsService, indexService, indexReaderService, metadataReaderService);
         mainWindow.setVisible(true);
     }
 

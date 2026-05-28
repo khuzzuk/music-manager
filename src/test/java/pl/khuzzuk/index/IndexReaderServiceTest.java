@@ -1,7 +1,8 @@
 package pl.khuzzuk.index;
 
 import pl.khuzzuk.metadata.MetadataReaderService;
-import pl.khuzzuk.metadata.SoundFileMetadata;
+import pl.khuzzuk.metadata.MetadataWriterService;
+import pl.khuzzuk.metadata.DocumentMapper;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -102,7 +103,11 @@ class IndexReaderServiceTest {
         Files.createFile(album.resolve("song.mp3"));
         Path indexPath = tempDir.resolve("index.dat");
 
-        new IndexService(indexPath, new MetadataReaderService()).index(new RootIndexItem(), List.of(music));
+        new IndexService(
+                indexPath,
+                new MetadataReaderService(),
+                new MetadataWriterService(tempDir.resolve("metadata-index"), new DocumentMapper()))
+                .index(new RootIndexItem(), List.of(music));
         RootIndexItem root = indexReaderService(indexPath).read();
 
         IndexItem indexedMusic = root.getChildren().getFirst();
@@ -113,69 +118,6 @@ class IndexReaderServiceTest {
         assertEquals(List.of("song.mp3"), indexedMusic.getChildren().getFirst().getChildren().stream()
                 .map(IndexItem::getName)
                 .toList());
-    }
-
-    @Test
-    void readsMetadataForSoundFilesFromIndexFile() throws IOException {
-        Path indexPath = tempDir.resolve("index.dat");
-        Path music = tempDir.resolve("music").toAbsolutePath().normalize();
-        Path song = music.resolve("song.mp3").toAbsolutePath().normalize();
-        Files.writeString(indexPath,
-                IndexItem.LINE_SEPARATOR
-                        + IndexItem.DIRECTORY_PREFIX + IndexItem.ROOT_NAME + IndexItem.LINE_SEPARATOR
-                        + IndexItem.DIRECTORY_PREFIX + escape(music.toString()) + IndexItem.LINE_SEPARATOR
-                        + escape(song.toString()) + IndexItem.LINE_SEPARATOR);
-        SoundFileMetadata metadata = new SoundFileMetadata(
-                "MPEG",
-                song.toString(),
-                "song.mp3",
-                null,
-                "Song Title",
-                7,
-                null,
-                null,
-                null,
-                "Album",
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                "Calm",
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
-        MetadataReaderService metadataReaderService = new MetadataReaderService() {
-            @Override
-            public SoundFileMetadata readMetadata(Path path) {
-                assertEquals(song, path);
-                return metadata;
-            }
-        };
-
-        RootIndexItem root = new IndexReaderService(indexPath, metadataReaderService).read();
-
-        SoundFileIndexItem indexedSong = assertInstanceOf(
-                SoundFileIndexItem.class,
-                root.getChildren().getFirst().getChildren().getFirst());
-        assertSame(metadata, indexedSong.getMetadata());
     }
 
     @Test
@@ -212,6 +154,6 @@ class IndexReaderServiceTest {
     }
 
     private IndexReaderService indexReaderService(Path indexPath) {
-        return new IndexReaderService(indexPath, new MetadataReaderService());
+        return new IndexReaderService(indexPath);
     }
 }

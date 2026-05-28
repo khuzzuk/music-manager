@@ -13,6 +13,8 @@ The class in this repository is named `SettingsService`, not `SettingService`.
 - `src/main/java/pl/khuzzuk/settings/Settings.java` - immutable settings record.
 - `src/main/java/pl/khuzzuk/settings/TrackColumn.java` - track-table column name
   and width.
+- `src/main/java/pl/khuzzuk/metadata/Tag.java` - supported track-table metadata
+  tags, labels, and metadata value providers.
 - `src/main/java/pl/khuzzuk/settings/SettingsToPropertiesMapper.java` - maps
   between `Settings` and `java.util.Properties`.
 - `settings.properties` - settings file created and overwritten by the service.
@@ -175,8 +177,9 @@ The mapper uses these keys:
 the standard Java separator for lists of paths (`;` on Windows, `:` on Unix-like
 systems).
 `trackColumns` is stored as one property where each column is `name:width` and
-columns are separated with `;`. Column names are stable metadata keys used by
-`TracksTable`.
+columns are separated with `;`. Column names are stable metadata keys mapped by
+`pl.khuzzuk.metadata.Tag`; UI code should use enum constants such as `RATING`,
+not raw string literals such as `"rating"`.
 
 Example:
 

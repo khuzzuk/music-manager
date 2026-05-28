@@ -1,6 +1,7 @@
 package pl.khuzzuk.index;
 
 import pl.khuzzuk.metadata.MetadataReaderService;
+import pl.khuzzuk.metadata.MetadataWriterService;
 import pl.khuzzuk.metadata.SoundFileMetadata;
 import pl.khuzzuk.player.SoundFileType;
 
@@ -20,11 +21,16 @@ import java.util.stream.Stream;
 public class IndexService {
     private final Path indexPath;
     private final MetadataReaderService metadataReaderService;
+    private final MetadataWriterService metadataWriterService;
     private final List<Consumer<RootIndexItem>> indexListeners = new ArrayList<>();
 
-    public IndexService(Path indexPath, MetadataReaderService metadataReaderService) {
+    public IndexService(
+            Path indexPath,
+            MetadataReaderService metadataReaderService,
+            MetadataWriterService metadataWriterService) {
         this.indexPath = indexPath;
         this.metadataReaderService = metadataReaderService;
+        this.metadataWriterService = metadataWriterService;
     }
 
     public void addIndexListener(Consumer<RootIndexItem> listener) {
@@ -143,8 +149,9 @@ public class IndexService {
                 return;
             }
 
+            writeMetadata(path);
             if (findChild(parent, getName(path), SoundFileIndexItem.class) == null) {
-                SoundFileIndexItem item = new SoundFileIndexItem(path, readMetadata(path));
+                SoundFileIndexItem item = new SoundFileIndexItem(path);
                 item.setParent(parent);
                 parent.getChildren().add(item);
             }
@@ -155,11 +162,12 @@ public class IndexService {
         }
     }
 
-    private SoundFileMetadata readMetadata(Path path) {
+    private void writeMetadata(Path path) {
         try {
-            return metadataReaderService.readMetadata(path);
+            SoundFileMetadata metadata = metadataReaderService.readMetadata(path);
+            metadataWriterService.writeMetadata(metadata);
         } catch (IOException | SecurityException e) {
-            return SoundFileMetadata.empty(path);
+            // Metadata indexing is best-effort; filesystem indexing should continue.
         }
     }
 
