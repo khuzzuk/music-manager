@@ -39,6 +39,7 @@ class IndexServiceTest {
         Path music = Files.createDirectory(tempDir.resolve("music"));
         Path album = Files.createDirectory(music.resolve("album"));
         Files.createFile(album.resolve("song.mp3"));
+        Files.createFile(album.resolve("notes.txt"));
         Path indexPath = tempDir.resolve("index.dat");
 
         new IndexService(indexPath).index(new RootIndexItem(), List.of(music));
@@ -50,6 +51,39 @@ class IndexServiceTest {
                         + IndexItem.DIRECTORY_PREFIX + escape(album.toAbsolutePath().normalize().toString()) + IndexItem.LINE_SEPARATOR
                         + escape(album.resolve("song.mp3").toAbsolutePath().normalize().toString()) + IndexItem.LINE_SEPARATOR,
                 Files.readString(indexPath));
+    }
+
+    @Test
+    void indexesOnlySupportedSoundFileExtensions() throws IOException {
+        Path music = Files.createDirectory(tempDir.resolve("music"));
+        Files.createFile(music.resolve("song.mp3"));
+        Files.createFile(music.resolve("album.flac"));
+        Files.createFile(music.resolve("notes.txt"));
+        Files.createFile(music.resolve("cover.jpg"));
+        Files.createFile(music.resolve("README"));
+        Path indexPath = tempDir.resolve("index.dat");
+
+        RootIndexItem root = new RootIndexItem();
+        new IndexService(indexPath).index(root, List.of(music));
+
+        assertEquals(List.of("album.flac", "song.mp3"), root.getChildren().getFirst().getChildren().stream()
+                .map(IndexItem::getName)
+                .toList());
+    }
+
+    @Test
+    void matchesSupportedSoundFileExtensionsCaseInsensitively() throws IOException {
+        Path music = Files.createDirectory(tempDir.resolve("music"));
+        Files.createFile(music.resolve("song.MP3"));
+        Files.createFile(music.resolve("album.FLAC"));
+        Path indexPath = tempDir.resolve("index.dat");
+
+        RootIndexItem root = new RootIndexItem();
+        new IndexService(indexPath).index(root, List.of(music));
+
+        assertEquals(List.of("album.FLAC", "song.MP3"), root.getChildren().getFirst().getChildren().stream()
+                .map(IndexItem::getName)
+                .toList());
     }
 
     @Test
@@ -222,6 +256,76 @@ class IndexServiceTest {
                 .toList());
         assertSame(song1, album.getChildren().getFirst());
         assertFalse(album.getChildren().contains(song2));
+    }
+
+    @Test
+    void removesUnsupportedSoundFileWhenMergingDirectory() throws IOException {
+        Path music = Files.createDirectory(tempDir.resolve("music"));
+        Path albumPath = Files.createDirectory(music.resolve("album"));
+        Files.createFile(albumPath.resolve("song.mp3"));
+        Files.createFile(albumPath.resolve("notes.txt"));
+        Path indexPath = tempDir.resolve("index.dat");
+
+        RootIndexItem root = new RootIndexItem();
+        DirectoryIndexItem existingMusic = new DirectoryIndexItem(music);
+        existingMusic.setParent(root);
+        DirectoryIndexItem album = new DirectoryIndexItem(albumPath);
+        album.setParent(existingMusic);
+        SoundFileIndexItem song = new SoundFileIndexItem(albumPath.resolve("song.mp3"));
+        song.setParent(album);
+        SoundFileIndexItem notes = new SoundFileIndexItem(albumPath.resolve("notes.txt"));
+        notes.setParent(album);
+        album.addChildren(List.of(song, notes));
+        existingMusic.addChildren(List.of(album));
+        root.addChildren(List.of(existingMusic));
+
+        new IndexService(indexPath).index(root, List.of(music));
+
+        assertEquals(List.of("song.mp3"), album.getChildren().stream()
+                .map(IndexItem::getName)
+                .toList());
+        assertSame(song, album.getChildren().getFirst());
+        assertFalse(album.getChildren().contains(notes));
+    }
+
+    @Test
+    void reindexesDirectoryWithoutRemovingSiblingRootDirectories() throws IOException {
+        Path music = Files.createDirectory(tempDir.resolve("music"));
+        Path album = Files.createDirectory(music.resolve("album"));
+        Path other = Files.createDirectory(tempDir.resolve("other"));
+        Path oldSong = Files.createFile(album.resolve("old.mp3"));
+        Path otherSong = Files.createFile(other.resolve("other.mp3"));
+        Path indexPath = tempDir.resolve("index.dat");
+        RootIndexItem root = new RootIndexItem();
+        IndexService indexService = new IndexService(indexPath);
+        indexService.index(root, List.of(music, other));
+        IndexItem musicItem = root.getChildren().stream()
+                .filter(item -> item.getName().equals("music"))
+                .findFirst()
+                .orElseThrow();
+        IndexItem albumItem = musicItem.getChildren().getFirst();
+
+        Files.delete(oldSong);
+        Path newSong = Files.createFile(album.resolve("new.mp3"));
+        indexService.reindexDirectory(albumItem);
+
+        assertEquals(List.of("music", "other"), root.getChildren().stream()
+                .map(IndexItem::getName)
+                .toList());
+        assertEquals(List.of("new.mp3"), albumItem.getChildren().stream()
+                .map(IndexItem::getName)
+                .toList());
+        assertEquals(List.of("other.mp3"), root.getChildren().stream()
+                .filter(item -> item.getName().equals("other"))
+                .findFirst()
+                .orElseThrow()
+                .getChildren().stream()
+                .map(IndexItem::getName)
+                .toList());
+        String persistedIndex = Files.readString(indexPath);
+        assertFalse(persistedIndex.contains(escape(oldSong.toAbsolutePath().normalize().toString())));
+        assertTrue(persistedIndex.contains(escape(newSong.toAbsolutePath().normalize().toString())));
+        assertTrue(persistedIndex.contains(escape(otherSong.toAbsolutePath().normalize().toString())));
     }
 
     @Test

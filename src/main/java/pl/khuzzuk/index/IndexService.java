@@ -1,5 +1,7 @@
 package pl.khuzzuk.index;
 
+import pl.khuzzuk.player.SoundFileType;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -7,6 +9,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -47,6 +50,45 @@ public class IndexService {
         return root;
     }
 
+    public RootIndexItem reindexDirectory(IndexItem directory) throws IOException {
+        if (!directory.isDirectory()) {
+            throw new IllegalArgumentException("Only directories can be reindexed.");
+        }
+
+        RootIndexItem root = findRoot(directory);
+        if (directory.isRoot()) {
+            List<Path> rootPaths = root.getChildren().stream()
+                    .filter(IndexItem::isDirectory)
+                    .map(IndexItem::getPath)
+                    .toList();
+            return index(root, rootPaths);
+        }
+
+        IndexItem parent = directory.getParent();
+        if (parent == null || directory.getPath() == null) {
+            throw new IllegalArgumentException("Directory must belong to an index tree.");
+        }
+
+        mergeDirectory(parent, directory.getPath());
+        sortChildren(parent);
+        saveIndex(root);
+        notifyIndexListeners(root);
+        return root;
+    }
+
+    private RootIndexItem findRoot(IndexItem item) {
+        IndexItem current = item;
+        while (current.getParent() != null) {
+            current = current.getParent();
+        }
+
+        if (current instanceof RootIndexItem root) {
+            return root;
+        }
+
+        throw new IllegalArgumentException("Directory must belong to an index tree.");
+    }
+
     private void notifyIndexListeners(RootIndexItem root) {
         indexListeners.forEach(listener -> listener.accept(root));
     }
@@ -65,6 +107,7 @@ public class IndexService {
                 DirectoryIndexItem targetDirectory = directory;
                 List<Path> childPaths = children
                         .map(path1 -> path1.toAbsolutePath().normalize())
+                        .filter(this::isIndexableChild)
                         .sorted(Comparator.comparing(this::getName, String.CASE_INSENSITIVE_ORDER))
                         .toList();
                 removeMissingChildren(targetDirectory, childPaths);
@@ -119,6 +162,25 @@ public class IndexService {
                 .filter(child -> child.getName().equalsIgnoreCase(name))
                 .findFirst()
                 .orElse(null);
+    }
+
+    private boolean isIndexableChild(Path path) {
+        try {
+            return Files.isDirectory(path) || isSupportedSoundFile(path);
+        } catch (SecurityException e) {
+            return true;
+        }
+    }
+
+    private boolean isSupportedSoundFile(Path path) {
+        String name = getName(path);
+        int extensionStart = name.lastIndexOf('.');
+        if (extensionStart < 0 || extensionStart == name.length() - 1) {
+            return false;
+        }
+
+        String extension = name.substring(extensionStart + 1).toLowerCase(Locale.ROOT);
+        return SoundFileType.EXTENSIONS.contains(extension);
     }
 
     private void sortChildren(IndexItem item) {

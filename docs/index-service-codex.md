@@ -30,11 +30,11 @@ implementations, error handling, and change contracts.
 virtual `RootIndexItem`, and writes the resulting tree to `index.dat`.
 `IndexReaderService` reads `index.dat` back into the same tree model. The indexing
 package is responsible for filesystem traversal and index persistence only. It
-does not currently filter by audio extension, read audio metadata, build Swing tree
-nodes, or connect the index to the player.
+filters files by supported audio extension, but does not read audio metadata,
+build Swing tree nodes, or connect the index to the player.
 
-The current implementation treats every non-directory path as a
-`SoundFileIndexItem`.
+The current implementation treats non-directory paths as `SoundFileIndexItem`
+only when their extension is listed in `SoundFileType.EXTENSIONS`.
 
 ## Public API
 
@@ -79,7 +79,7 @@ Current behavior:
 - maps each remaining root path through private `mergeDirectory(root, path)`;
 - reuses an existing directory node with the same name, compared
   case-insensitively, when merging;
-- adds missing directory and file nodes, preserving parent links;
+- adds missing directory and supported sound-file nodes, preserving parent links;
 - removes existing child nodes from each scanned directory when their names are no
   longer present in the current filesystem listing for that directory;
 - sorts children after merging;
@@ -109,11 +109,13 @@ Current flow:
 1. Finds or creates a `DirectoryIndexItem` for the current directory name.
 2. Opens `Files.list(path)`.
 3. Sorts child paths by display name with `String.CASE_INSENSITIVE_ORDER`.
-4. Removes current child nodes whose names are not present in the listing.
+4. Removes current child nodes whose names are not present in the indexable
+   listing. Directories are indexable, and files are indexable only when their
+   extension is listed in `SoundFileType.EXTENSIONS`.
 5. For each child, `mergeChild(...)` calls `Files.isDirectory(child)`.
 6. Directory children recurse through `mergeDirectory(...)`.
-7. Non-directory children create a `SoundFileIndexItem` only when a same-name
-   `SoundFileIndexItem` is not already present under the parent.
+7. Supported non-directory children create a `SoundFileIndexItem` only when a
+   same-name `SoundFileIndexItem` is not already present under the parent.
 8. After merging a directory, its children are sorted by
    `IndexItem.getName()` with `String.CASE_INSENSITIVE_ORDER`.
 9. If a newly-created directory cannot be listed because of `IOException` or
@@ -235,7 +237,7 @@ Behavior:
 
 ### SoundFileIndexItem
 
-Represents a non-directory filesystem entry.
+Represents a supported sound-file filesystem entry.
 
 Behavior:
 
@@ -247,8 +249,8 @@ Behavior:
 - `getChildren()` returns `List.of()`;
 - `hasChildren()` returns `false`;
 - `parent` is set by `IndexService`;
-- despite the class name, the current service does not validate whether the file is
-  actually an audio file.
+- `IndexService` creates this node only for files with extensions listed in
+  `SoundFileType.EXTENSIONS`.
 
 ### UnreadableIndexItem
 
@@ -301,8 +303,7 @@ When changing this area, keep these rules:
 - If `IndexItem` changes, update all four implementations:
   `RootIndexItem`, `DirectoryIndexItem`, `SoundFileIndexItem`, and
   `UnreadableIndexItem`.
-- If files should be filtered to actual audio files, change `IndexService` and
-  document the supported extensions.
+- If supported sound-file extensions change, update `SoundFileType.EXTENSIONS`.
 - If `SoundFileIndexItem` starts holding metadata or `pl.khuzzuk.player.SoundFile`,
   document the ownership boundary between indexing and playback.
 - Preserve parent links unless the caller contract is explicitly changed. Direct
@@ -332,8 +333,8 @@ When changing this area, keep these rules:
 - There are no tests for unreadable directory behavior because reliable permission
   manipulation is platform-dependent.
 - `RootIndexItem.getChildren()` exposes a mutable list.
-- `SoundFileIndexItem` currently represents every non-directory path, not only
-  sound files.
+- `IndexService` validates files by extension only. It does not inspect file
+  content or audio metadata before creating a `SoundFileIndexItem`.
 - `DirectoryIndexItem.getChildren()` exposes a mutable list.
 - `UnreadableIndexItem` does not store the exception or reason why reading failed.
 - Symbolic links are not handled specially. `Files.isDirectory(path)` follows links
@@ -397,8 +398,9 @@ to `index(RootIndexItem, List<Path>)` is first mapped through
 one normalized input path is nested under another input path, the nested path is
 skipped as a direct root child. Remaining paths are sorted by display name and
 merged with existing same-name directory nodes where possible.
-Missing directory and sound-file nodes are added with parent links; stale nodes
-not present in the current root paths or scanned directory listings are removed.
+Missing directory and supported sound-file nodes are added with parent links;
+stale nodes not present in the current root paths or scanned indexable directory
+listings are removed.
 Directory and sound-file items created by `IndexService` expose absolute normalized
 paths through `getPath()`. `UnreadableIndexItem.getPath()` returns its parent path.
 After building the tree, IndexService writes `index.dat` as UTF-8 text lines
@@ -432,8 +434,8 @@ a newly-created directory throws IOException or SecurityException, it replaces t
 new node with UnreadableIndexItem instead of failing the whole tree.
 
 Current limitations:
-SoundFileIndexItem is used for every non-directory child path, not only verified
-audio files. Public root paths are assumed to be directories. DirectoryIndexItem
+SoundFileIndexItem is selected by file extension only, not by verified audio
+content. Public root paths are assumed to be directories. DirectoryIndexItem
 exposes a mutable children list. Symlink cycles are not handled specially.
 
 When changing IndexItem, update RootIndexItem, DirectoryIndexItem,
