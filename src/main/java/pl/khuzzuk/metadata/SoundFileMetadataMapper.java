@@ -1,8 +1,8 @@
 package pl.khuzzuk.metadata;
 
 import org.jaudiotagger.audio.AudioFile;
-import org.jaudiotagger.audio.AudioHeader;
 import org.jaudiotagger.tag.FieldKey;
+import pl.khuzzuk.player.SoundFileType;
 
 import java.nio.file.Path;
 
@@ -15,15 +15,15 @@ public class SoundFileMetadataMapper {
 
     public SoundFileMetadata toMetadata(AudioFile audioFile, Path indexedPath) {
         Path path = audioFile.getFile().toPath();
-        AudioHeader audioHeader = audioFile.getAudioHeader();
+        SoundFileType format = getFormat(path);
         org.jaudiotagger.tag.Tag tag = audioFile.getTag();
         return new SoundFileMetadata(
-                getFormat(audioHeader),
+                format,
                 path.toAbsolutePath().normalize().toString(),
                 path.getFileName().toString(),
                 indexedPath == null ? null : indexedPath.toAbsolutePath().normalize().toString(),
                 getFirst(tag, FieldKey.TITLE),
-                Rating.fromMetadataValue(getFirst(tag, FieldKey.RATING)),
+                format.readRating(getFirst(tag, FieldKey.RATING)),
                 firstNotNull(getFirst(tag, FieldKey.RECORDINGDATE), getFirst(tag, FieldKey.YEAR)),
                 getFirst(tag, FieldKey.ARTIST),
                 getFirst(tag, FieldKey.ARTISTS),
@@ -56,9 +56,9 @@ public class SoundFileMetadataMapper {
                 getFirst(tag, FieldKey.WORK_TYPE));
     }
 
-    private String getFormat(AudioHeader audioHeader) {
-        String format = emptyToNull(audioHeader.getFormat());
-        return format == null ? audioHeader.getEncodingType() : format;
+    private SoundFileType getFormat(Path path) {
+        return SoundFileType.fromPath(path)
+                .orElseThrow(() -> new IllegalArgumentException("Unsupported sound file path: " + path));
     }
 
     private String getFirst(org.jaudiotagger.tag.Tag tag, FieldKey fieldKey) {

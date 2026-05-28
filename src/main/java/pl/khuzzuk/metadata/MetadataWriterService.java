@@ -1,35 +1,34 @@
 package pl.khuzzuk.metadata;
 
-import org.apache.lucene.analysis.core.KeywordAnalyzer;
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.store.FSDirectory;
+import org.jaudiotagger.audio.AudioFile;
+import org.jaudiotagger.audio.AudioFileIO;
+import org.jaudiotagger.audio.exceptions.CannotReadException;
+import org.jaudiotagger.audio.exceptions.CannotWriteException;
+import org.jaudiotagger.audio.exceptions.InvalidAudioFrameException;
+import org.jaudiotagger.audio.exceptions.ReadOnlyFileException;
+import org.jaudiotagger.tag.FieldKey;
+import org.jaudiotagger.tag.TagException;
+import pl.khuzzuk.player.SoundFileType;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 
 public class MetadataWriterService {
-    private final Path indexDirectory;
-    private final DocumentMapper documentMapper;
-
-    public MetadataWriterService(Path indexDirectory, DocumentMapper documentMapper) {
-        this.indexDirectory = indexDirectory;
-        this.documentMapper = documentMapper;
-    }
-
-    public void writeMetadata(SoundFileMetadata metadata) throws IOException {
-        if (metadata == null || metadata.path() == null || metadata.path().isBlank()) {
-            return;
-        }
-
-        Files.createDirectories(indexDirectory);
-        try (FSDirectory directory = FSDirectory.open(indexDirectory);
-             IndexWriter writer = new IndexWriter(directory, new IndexWriterConfig(new KeywordAnalyzer()))) {
-            writer.updateDocument(
-                    new Term(DocumentMapper.PATH_FIELD, metadata.path()),
-                    documentMapper.toDocument(metadata));
+    public void writeRating(Path path, int ratingValue) throws IOException {
+        try {
+            AudioFile audioFile = AudioFileIO.read(path.toFile());
+            org.jaudiotagger.tag.Tag tag = audioFile.getTagOrCreateAndSetDefault();
+            int metadataValue = SoundFileType.fromPath(path)
+                    .orElseThrow(() -> new IOException("Unsupported sound file path: " + path))
+                    .getRatingMetadataValue(ratingValue);
+            tag.setField(FieldKey.RATING, String.valueOf(metadataValue));
+            AudioFileIO.write(audioFile);
+        } catch (CannotReadException
+                 | CannotWriteException
+                 | TagException
+                 | ReadOnlyFileException
+                 | InvalidAudioFrameException e) {
+            throw new IOException("Cannot write audio metadata to " + path, e);
         }
     }
 }

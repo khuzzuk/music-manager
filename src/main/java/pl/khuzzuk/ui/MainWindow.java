@@ -3,6 +3,8 @@ package pl.khuzzuk.ui;
 import pl.khuzzuk.index.IndexReaderService;
 import pl.khuzzuk.index.IndexService;
 import pl.khuzzuk.metadata.MetadataReaderService;
+import pl.khuzzuk.metadata.MetadataIndexWriterService;
+import pl.khuzzuk.metadata.MetadataWriterService;
 import pl.khuzzuk.settings.Settings;
 import pl.khuzzuk.settings.SettingsService;
 
@@ -16,7 +18,9 @@ public class MainWindow extends JFrame {
             SettingsService settingsService,
             IndexService indexService,
             IndexReaderService indexReaderService,
-            MetadataReaderService metadataReaderService) {
+            MetadataReaderService metadataReaderService,
+            MetadataWriterService metadataWriterService,
+            MetadataIndexWriterService metadataIndexWriterService) {
         super("Music Manager");
         this.settingsService = settingsService;
 
@@ -24,7 +28,13 @@ public class MainWindow extends JFrame {
         setBounds(settings.windowX(),  settings.windowY(), settings.windowWidth(), settings.windowHeight());
 
         setLayout(new BorderLayout(5, 5));
-        ContentPane contentPane = new ContentPane(settingsService, indexReaderService, indexService, metadataReaderService);
+        ContentPane contentPane = new ContentPane(
+                settingsService,
+                indexReaderService,
+                indexService,
+                metadataReaderService,
+                metadataWriterService,
+                metadataIndexWriterService);
         add(contentPane, BorderLayout.CENTER);
         PlayerPane playerPane = new PlayerPane();
         add(playerPane, BorderLayout.SOUTH);

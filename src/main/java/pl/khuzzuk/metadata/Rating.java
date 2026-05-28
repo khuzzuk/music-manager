@@ -31,16 +31,14 @@ public enum Rating {
         this.rate = rate;
     }
 
-    public static int fromMetadataValue(String value) {
-        if (value == null || value.isBlank()) {
-            return UNDEFINED.rate;
+    public static Rating fromByte(int value) {
+        for (Rating rating : values()) {
+            if (value >= rating.min && value <= rating.max) {
+                return rating;
+            }
         }
 
-        try {
-            return fromP(Integer.parseInt(value.trim())).rate;
-        } catch (NumberFormatException e) {
-            return UNDEFINED.rate;
-        }
+        return UNDEFINED;
     }
 
     public static Rating fromP(int value) {
@@ -51,5 +49,27 @@ public enum Rating {
         }
 
         return UNDEFINED;
+    }
+
+    public static Rating fromRate(int rate) {
+        for (Rating rating : values()) {
+            if (rating.rate == rate) {
+                return rating;
+            }
+        }
+
+        return UNDEFINED;
+    }
+
+    public int getValueP() {
+        return valueP;
+    }
+
+    public int getValue() {
+        return value;
+    }
+
+    public int getRate() {
+        return rate;
     }
 }

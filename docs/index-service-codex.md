@@ -12,15 +12,16 @@ implementations, error handling, and change contracts.
   and reconstructs a `RootIndexItem` tree.
 - `index.dat` - generated index output written by `IndexService.index(...)`.
 - `metadata-index/` - generated Lucene metadata index written by
-  `MetadataWriterService`.
+  `MetadataIndexWriterService`.
 - `src/main/java/pl/khuzzuk/metadata/MetadataReaderService.java` - reads audio
   metadata from files.
 - `src/main/java/pl/khuzzuk/metadata/SoundFileMetadataMapper.java` - maps
   jaudiotagger `AudioFile` objects to `SoundFileMetadata`; mapped file `path` and
-  `format` are expected to be present.
+  `format` are expected to be present. `format` is a non-null `SoundFileType`
+  because indexing only reads metadata for supported sound-file extensions.
 - `src/main/java/pl/khuzzuk/metadata/MoodConverter.java` - resolves mood values,
   including fallback values stored in comment frames.
-- `src/main/java/pl/khuzzuk/metadata/MetadataWriterService.java` - writes
+- `src/main/java/pl/khuzzuk/metadata/MetadataIndexWriterService.java` - writes
   metadata documents into the Lucene index.
 - `src/main/java/pl/khuzzuk/index/IndexItem.java` - common tree node interface.
 - `src/main/java/pl/khuzzuk/index/RootIndexItem.java` - virtual root node named
@@ -43,11 +44,11 @@ virtual `RootIndexItem`, and writes the resulting tree to `index.dat`.
 package is responsible for filesystem traversal and index persistence. During
 indexing, `IndexService` reads metadata for supported sound files through
 `MetadataReaderService` and writes it to a separate Lucene metadata index through
-`MetadataWriterService`. It does not attach metadata to `SoundFileIndexItem`, build
+`MetadataIndexWriterService`. It does not attach metadata to `SoundFileIndexItem`, build
 Swing tree nodes, or connect the index to the player.
 
 The current implementation treats non-directory paths as `SoundFileIndexItem`
-only when their extension is listed in `SoundFileType.EXTENSIONS`.
+only when `SoundFileType.fromPath(path)` resolves a supported type.
 
 ## Public API
 
@@ -57,7 +58,7 @@ only when their extension is listed in `SoundFileType.EXTENSIONS`.
 public IndexService(
         Path indexPath,
         MetadataReaderService metadataReaderService,
-        MetadataWriterService metadataWriterService)
+        MetadataIndexWriterService metadataIndexWriterService)
 public void addIndexListener(Consumer<RootIndexItem> listener)
 public void removeIndexListener(Consumer<RootIndexItem> listener)
 ```
@@ -126,14 +127,14 @@ Current flow:
 2. Opens `Files.list(path)`.
 3. Sorts child paths by display name with `String.CASE_INSENSITIVE_ORDER`.
 4. Removes current child nodes whose names are not present in the indexable
-   listing. Directories are indexable, and files are indexable only when their
-   extension is listed in `SoundFileType.EXTENSIONS`.
+   listing. Directories are indexable, and files are indexable only when
+   `SoundFileType.fromPath(path)` resolves a supported type.
 5. For each child, `mergeChild(...)` calls `Files.isDirectory(child)`.
 6. Directory children recurse through `mergeDirectory(...)`.
 7. Supported non-directory children create a `SoundFileIndexItem` only when a
    same-name `SoundFileIndexItem` is not already present under the parent.
 8. Supported non-directory children read metadata through `MetadataReaderService`
-   and write it through `MetadataWriterService`. Metadata read/write failures are
+   and write it through `MetadataIndexWriterService`. Metadata read/write failures are
    best-effort and do not stop filesystem indexing.
 9. After merging a directory, its children are sorted by
    `IndexItem.getName()` with `String.CASE_INSENSITIVE_ORDER`.
@@ -268,8 +269,8 @@ Behavior:
 - `getChildren()` returns `List.of()`;
 - `hasChildren()` returns `false`;
 - `parent` is set by `IndexService`;
-- `IndexService` creates this node only for files with extensions listed in
-  `SoundFileType.EXTENSIONS`.
+- `IndexService` creates this node only for files resolved by
+  `SoundFileType.fromPath(path)`.
 
 ### UnreadableIndexItem
 
@@ -322,9 +323,10 @@ When changing this area, keep these rules:
 - If `IndexItem` changes, update all four implementations:
   `RootIndexItem`, `DirectoryIndexItem`, `SoundFileIndexItem`, and
   `UnreadableIndexItem`.
-- If supported sound-file extensions change, update `SoundFileType.EXTENSIONS`.
+- If supported sound-file extensions change, update the `SoundFileType` enum
+  entries.
 - Do not attach audio metadata to `SoundFileIndexItem`; indexing metadata belongs
-  in the separate Lucene metadata index owned by `MetadataWriterService`.
+  in the separate Lucene metadata index owned by `MetadataIndexWriterService`.
 - Preserve parent links unless the caller contract is explicitly changed. Direct
   children of `RootIndexItem` should use that root as their parent.
 - Preserve synchronization semantics for `index(RootIndexItem, List<Path>)`:
@@ -403,7 +405,7 @@ Paste this block when Codex needs to work on indexing:
 ```text
 The Music Manager project has `pl.khuzzuk.index.IndexService`.
 `IndexService` has an `IndexService(Path indexPath, MetadataReaderService
-metadataReaderService, MetadataWriterService metadataWriterService)` constructor
+metadataReaderService, MetadataIndexWriterService metadataIndexWriterService)` constructor
 for injecting the output file and metadata indexing services.
 `IndexService.index(RootIndexItem, List<Path>)` is the public indexing entry point.
 Callers must create and pass the `RootIndexItem`; the service mutates and returns

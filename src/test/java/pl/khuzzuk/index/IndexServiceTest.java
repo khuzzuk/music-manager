@@ -1,7 +1,7 @@
 package pl.khuzzuk.index;
 
 import pl.khuzzuk.metadata.MetadataReaderService;
-import pl.khuzzuk.metadata.MetadataWriterService;
+import pl.khuzzuk.metadata.MetadataIndexWriterService;
 import pl.khuzzuk.metadata.SoundFileMetadata;
 import pl.khuzzuk.metadata.DocumentMapper;
 
@@ -406,7 +406,7 @@ class IndexServiceTest {
                 return metadata;
             }
         };
-        MetadataWriterService metadataWriterService = new MetadataWriterService(
+        MetadataIndexWriterService metadataIndexWriterService = new MetadataIndexWriterService(
                 tempDir.resolve("metadata-index"),
                 new DocumentMapper()) {
             @Override
@@ -415,7 +415,7 @@ class IndexServiceTest {
             }
         };
 
-        new IndexService(indexPath, metadataReaderService, metadataWriterService).index(new RootIndexItem(), List.of(music));
+        new IndexService(indexPath, metadataReaderService, metadataIndexWriterService).index(new RootIndexItem(), List.of(music));
 
         assertSame(metadata, writtenMetadata.get());
     }
@@ -442,10 +442,10 @@ class IndexServiceTest {
                 .replace("|", "\\|");
     }
 
-    private IndexService indexService(Path indexPath) {
+    private IndexService indexService(Path indexPath) throws IOException {
         return new IndexService(
                 indexPath,
                 new MetadataReaderService(),
-                new MetadataWriterService(tempDir.resolve("metadata-index"), new DocumentMapper()));
+                new MetadataIndexWriterService(tempDir.resolve("metadata-index"), new DocumentMapper()));
     }
 }

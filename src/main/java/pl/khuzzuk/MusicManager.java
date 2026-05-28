@@ -5,6 +5,7 @@ import pl.khuzzuk.index.IndexReaderService;
 import pl.khuzzuk.index.IndexService;
 import pl.khuzzuk.metadata.DocumentMapper;
 import pl.khuzzuk.metadata.MetadataReaderService;
+import pl.khuzzuk.metadata.MetadataIndexWriterService;
 import pl.khuzzuk.metadata.MetadataWriterService;
 import pl.khuzzuk.metadata.MoodConverter;
 import pl.khuzzuk.metadata.SoundFileMetadataMapper;
@@ -26,6 +27,7 @@ public class MusicManager {
     public static SoundFileMetadataMapper soundFileMetadataMapper;
     public static MetadataReaderService metadataReaderService;
     public static MetadataWriterService metadataWriterService;
+    public static MetadataIndexWriterService metadataIndexWriterService;
     public static DocumentMapper documentMapper;
     public static IndexService indexService;
     public static IndexReaderService indexReaderService;
@@ -44,10 +46,11 @@ public class MusicManager {
             moodConverter = new MoodConverter();
             soundFileMetadataMapper = new SoundFileMetadataMapper(moodConverter);
             metadataReaderService = new MetadataReaderService(soundFileMetadataMapper);
+            metadataWriterService = new MetadataWriterService();
             documentMapper = new DocumentMapper();
-            metadataWriterService = new MetadataWriterService(METADATA_INDEX_PATH, documentMapper);
+            metadataIndexWriterService = new MetadataIndexWriterService(METADATA_INDEX_PATH, documentMapper);
             createIndexFileIfMissing();
-            indexService = new IndexService(INDEX_PATH, metadataReaderService, metadataWriterService);
+            indexService = new IndexService(INDEX_PATH, metadataReaderService, metadataIndexWriterService);
             indexReaderService = new IndexReaderService(INDEX_PATH);
             indexReaderService.read();
         } catch (IOException e) {
@@ -63,7 +66,13 @@ public class MusicManager {
     }
 
     private static void showMainWindow() {
-        MainWindow mainWindow = new MainWindow(settingsService, indexService, indexReaderService, metadataReaderService);
+        MainWindow mainWindow = new MainWindow(
+                settingsService,
+                indexService,
+                indexReaderService,
+                metadataReaderService,
+                metadataWriterService,
+                metadataIndexWriterService);
         mainWindow.setVisible(true);
     }
 

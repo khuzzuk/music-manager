@@ -1,7 +1,7 @@
 package pl.khuzzuk.index;
 
 import pl.khuzzuk.metadata.MetadataReaderService;
-import pl.khuzzuk.metadata.MetadataWriterService;
+import pl.khuzzuk.metadata.MetadataIndexWriterService;
 import pl.khuzzuk.metadata.SoundFileMetadata;
 import pl.khuzzuk.player.SoundFileType;
 
@@ -12,7 +12,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -21,16 +20,16 @@ import java.util.stream.Stream;
 public class IndexService {
     private final Path indexPath;
     private final MetadataReaderService metadataReaderService;
-    private final MetadataWriterService metadataWriterService;
+    private final MetadataIndexWriterService metadataIndexWriterService;
     private final List<Consumer<RootIndexItem>> indexListeners = new ArrayList<>();
 
     public IndexService(
             Path indexPath,
             MetadataReaderService metadataReaderService,
-            MetadataWriterService metadataWriterService) {
+            MetadataIndexWriterService metadataIndexWriterService) {
         this.indexPath = indexPath;
         this.metadataReaderService = metadataReaderService;
-        this.metadataWriterService = metadataWriterService;
+        this.metadataIndexWriterService = metadataIndexWriterService;
     }
 
     public void addIndexListener(Consumer<RootIndexItem> listener) {
@@ -165,7 +164,7 @@ public class IndexService {
     private void writeMetadata(Path path) {
         try {
             SoundFileMetadata metadata = metadataReaderService.readMetadata(path);
-            metadataWriterService.writeMetadata(metadata);
+            metadataIndexWriterService.writeMetadata(metadata);
         } catch (IOException | SecurityException e) {
             // Metadata indexing is best-effort; filesystem indexing should continue.
         }
@@ -193,14 +192,7 @@ public class IndexService {
     }
 
     private boolean isSupportedSoundFile(Path path) {
-        String name = getName(path);
-        int extensionStart = name.lastIndexOf('.');
-        if (extensionStart < 0 || extensionStart == name.length() - 1) {
-            return false;
-        }
-
-        String extension = name.substring(extensionStart + 1).toLowerCase(Locale.ROOT);
-        return SoundFileType.EXTENSIONS.contains(extension);
+        return SoundFileType.fromPath(path).isPresent();
     }
 
     private void sortChildren(IndexItem item) {

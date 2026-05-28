@@ -3,6 +3,8 @@ package pl.khuzzuk.ui;
 import pl.khuzzuk.index.IndexReaderService;
 import pl.khuzzuk.index.IndexService;
 import pl.khuzzuk.metadata.MetadataReaderService;
+import pl.khuzzuk.metadata.MetadataIndexWriterService;
+import pl.khuzzuk.metadata.MetadataWriterService;
 import pl.khuzzuk.player.PlaylistSoundFile;
 import pl.khuzzuk.settings.SettingsService;
 
@@ -19,10 +21,16 @@ public class ContentPane extends JPanel {
             SettingsService settingsService,
             IndexReaderService indexReaderService,
             IndexService indexService,
-            MetadataReaderService metadataReaderService) {
+            MetadataReaderService metadataReaderService,
+            MetadataWriterService metadataWriterService,
+            MetadataIndexWriterService metadataIndexWriterService) {
         super(new GridBagLayout());
 
-        TracksTable tracksTable = new TracksTable(settingsService, metadataReaderService);
+        TracksTable tracksTable = new TracksTable(
+                settingsService,
+                metadataReaderService,
+                metadataWriterService,
+                metadataIndexWriterService);
         JList<PlaylistSoundFile> playlist = new JList<>();
         FileTree fileTree = new FileTree(indexReaderService, indexService, tracksTable::showMappedFiles);
 

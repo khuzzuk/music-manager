@@ -1,7 +1,7 @@
 package pl.khuzzuk.index;
 
 import pl.khuzzuk.metadata.MetadataReaderService;
-import pl.khuzzuk.metadata.MetadataWriterService;
+import pl.khuzzuk.metadata.MetadataIndexWriterService;
 import pl.khuzzuk.metadata.DocumentMapper;
 
 import org.junit.jupiter.api.Test;
@@ -106,7 +106,7 @@ class IndexReaderServiceTest {
         new IndexService(
                 indexPath,
                 new MetadataReaderService(),
-                new MetadataWriterService(tempDir.resolve("metadata-index"), new DocumentMapper()))
+                new MetadataIndexWriterService(tempDir.resolve("metadata-index"), new DocumentMapper()))
                 .index(new RootIndexItem(), List.of(music));
         RootIndexItem root = indexReaderService(indexPath).read();
 

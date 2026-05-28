@@ -1,9 +1,12 @@
 package pl.khuzzuk.metadata;
 
+import pl.khuzzuk.player.SoundFileType;
+
 import java.nio.file.Path;
+import java.util.Objects;
 
 public record SoundFileMetadata(
-        String format,
+        SoundFileType format,
         String path,
         String fileName,
         String indexedPath,
@@ -39,15 +42,21 @@ public record SoundFileMetadata(
         String track,
         String work,
         String workType) {
+    public SoundFileMetadata {
+        Objects.requireNonNull(format, "format");
+    }
+
     public static SoundFileMetadata empty(Path path) {
         return empty(path, null);
     }
 
     public static SoundFileMetadata empty(Path path, Path indexedPath) {
+        SoundFileType format = SoundFileType.fromPath(path)
+                .orElseThrow(() -> new IllegalArgumentException("Unsupported sound file path: " + path));
         return new SoundFileMetadata(
-                null,
-                path == null ? null : path.toAbsolutePath().normalize().toString(),
-                path == null || path.getFileName() == null ? null : path.getFileName().toString(),
+                format,
+                path.toAbsolutePath().normalize().toString(),
+                path.getFileName().toString(),
                 indexedPath == null ? null : indexedPath.toAbsolutePath().normalize().toString(),
                 null,
                 0,
@@ -81,5 +90,45 @@ public record SoundFileMetadata(
                 null,
                 null,
                 null);
+    }
+
+    public SoundFileMetadata withRating(int newRating) {
+        return new SoundFileMetadata(
+                format,
+                path,
+                fileName,
+                indexedPath,
+                title,
+                newRating,
+                date,
+                artist,
+                artists,
+                album,
+                albumArtist,
+                albumArtists,
+                composer,
+                conductor,
+                country,
+                custom1,
+                custom2,
+                custom3,
+                custom4,
+                custom5,
+                discNo,
+                genre,
+                group,
+                instrument,
+                mood,
+                movement,
+                occasion,
+                opus,
+                orchestra,
+                quality,
+                ranking,
+                tempo,
+                tonality,
+                track,
+                work,
+                workType);
     }
 }
