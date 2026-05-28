@@ -1,5 +1,7 @@
 package pl.khuzzuk.index;
 
+import pl.khuzzuk.metadata.MetadataReaderService;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -99,7 +101,7 @@ class IndexReaderServiceTest {
         Files.createFile(album.resolve("song.mp3"));
         Path indexPath = tempDir.resolve("index.dat");
 
-        new IndexService(indexPath).index(new RootIndexItem(), List.of(music));
+        new IndexService(indexPath, new MetadataReaderService()).index(new RootIndexItem(), List.of(music));
         RootIndexItem root = new IndexReaderService(indexPath).read();
 
         IndexItem indexedMusic = root.getChildren().getFirst();

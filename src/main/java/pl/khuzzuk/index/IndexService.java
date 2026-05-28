@@ -1,5 +1,7 @@
 package pl.khuzzuk.index;
 
+import pl.khuzzuk.metadata.MetadataReaderService;
+import pl.khuzzuk.metadata.SoundFileMetadata;
 import pl.khuzzuk.player.SoundFileType;
 
 import java.io.IOException;
@@ -17,10 +19,12 @@ import java.util.stream.Stream;
 
 public class IndexService {
     private final Path indexPath;
+    private final MetadataReaderService metadataReaderService;
     private final List<Consumer<RootIndexItem>> indexListeners = new ArrayList<>();
 
-    public IndexService(Path indexPath) {
+    public IndexService(Path indexPath, MetadataReaderService metadataReaderService) {
         this.indexPath = indexPath;
+        this.metadataReaderService = metadataReaderService;
     }
 
     public void addIndexListener(Consumer<RootIndexItem> listener) {
@@ -50,7 +54,7 @@ public class IndexService {
         return root;
     }
 
-    public RootIndexItem reindexDirectory(IndexItem directory) throws IOException {
+    public void reindexDirectory(IndexItem directory) throws IOException {
         if (!directory.isDirectory()) {
             throw new IllegalArgumentException("Only directories can be reindexed.");
         }
@@ -61,7 +65,8 @@ public class IndexService {
                     .filter(IndexItem::isDirectory)
                     .map(IndexItem::getPath)
                     .toList();
-            return index(root, rootPaths);
+            index(root, rootPaths);
+            return;
         }
 
         IndexItem parent = directory.getParent();
@@ -73,7 +78,6 @@ public class IndexService {
         sortChildren(parent);
         saveIndex(root);
         notifyIndexListeners(root);
-        return root;
     }
 
     private RootIndexItem findRoot(IndexItem item) {
@@ -140,7 +144,7 @@ public class IndexService {
             }
 
             if (findChild(parent, getName(path), SoundFileIndexItem.class) == null) {
-                SoundFileIndexItem item = new SoundFileIndexItem(path);
+                SoundFileIndexItem item = new SoundFileIndexItem(path, readMetadata(path));
                 item.setParent(parent);
                 parent.getChildren().add(item);
             }
@@ -148,6 +152,14 @@ public class IndexService {
             UnreadableIndexItem item = new UnreadableIndexItem(getName(path));
             item.setParent(parent);
             parent.getChildren().add(item);
+        }
+    }
+
+    private SoundFileMetadata readMetadata(Path path) {
+        try {
+            return metadataReaderService.readMetadata(path);
+        } catch (IOException | SecurityException e) {
+            return SoundFileMetadata.empty(path);
         }
     }
 

@@ -1,5 +1,8 @@
 package pl.khuzzuk.index;
 
+import pl.khuzzuk.metadata.MetadataReaderService;
+import pl.khuzzuk.metadata.SoundFileMetadata;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -25,7 +28,7 @@ class IndexServiceTest {
         Path music = Files.createDirectory(tempDir.resolve("music"));
         Path indexPath = tempDir.resolve("index.dat");
 
-        new IndexService(indexPath).index(new RootIndexItem(), List.of(music));
+        indexService(indexPath).index(new RootIndexItem(), List.of(music));
 
         assertEquals(
                 IndexItem.LINE_SEPARATOR
@@ -42,7 +45,7 @@ class IndexServiceTest {
         Files.createFile(album.resolve("notes.txt"));
         Path indexPath = tempDir.resolve("index.dat");
 
-        new IndexService(indexPath).index(new RootIndexItem(), List.of(music));
+        indexService(indexPath).index(new RootIndexItem(), List.of(music));
 
         assertEquals(
                 IndexItem.LINE_SEPARATOR
@@ -64,7 +67,7 @@ class IndexServiceTest {
         Path indexPath = tempDir.resolve("index.dat");
 
         RootIndexItem root = new RootIndexItem();
-        new IndexService(indexPath).index(root, List.of(music));
+        indexService(indexPath).index(root, List.of(music));
 
         assertEquals(List.of("album.flac", "song.mp3"), root.getChildren().getFirst().getChildren().stream()
                 .map(IndexItem::getName)
@@ -79,7 +82,7 @@ class IndexServiceTest {
         Path indexPath = tempDir.resolve("index.dat");
 
         RootIndexItem root = new RootIndexItem();
-        new IndexService(indexPath).index(root, List.of(music));
+        indexService(indexPath).index(root, List.of(music));
 
         assertEquals(List.of("album.FLAC", "song.MP3"), root.getChildren().getFirst().getChildren().stream()
                 .map(IndexItem::getName)
@@ -96,7 +99,7 @@ class IndexServiceTest {
         Path indexPath = tempDir.resolve("index.dat");
 
         RootIndexItem root = new RootIndexItem();
-        new IndexService(indexPath).index(root, List.of(secondRoot, firstRoot));
+        indexService(indexPath).index(root, List.of(secondRoot, firstRoot));
 
         assertEquals(List.of("Alpha", "bravo"), root.getChildren().stream()
                 .map(IndexItem::getName)
@@ -114,7 +117,7 @@ class IndexServiceTest {
         Path indexPath = tempDir.resolve("index.dat");
 
         RootIndexItem root = new RootIndexItem();
-        new IndexService(indexPath).index(root, List.of(album, music));
+        indexService(indexPath).index(root, List.of(album, music));
 
         assertEquals(1, root.getChildren().size());
         assertEquals("music", root.getChildren().getFirst().getName());
@@ -140,7 +143,7 @@ class IndexServiceTest {
         existingMusic.addChildren(List.of(existingAlbum));
         root.addChildren(List.of(existingMusic));
 
-        RootIndexItem indexedRoot = new IndexService(indexPath).index(root, List.of(music));
+        RootIndexItem indexedRoot = indexService(indexPath).index(root, List.of(music));
 
         assertSame(root, indexedRoot);
         assertEquals(1, root.getChildren().size());
@@ -164,7 +167,7 @@ class IndexServiceTest {
         existingMusic.setParent(root);
         root.addChildren(List.of(existingMusic));
 
-        new IndexService(indexPath).index(root, List.of(music));
+        indexService(indexPath).index(root, List.of(music));
 
         assertEquals(1, root.getChildren().size());
         assertSame(existingMusic, root.getChildren().getFirst());
@@ -191,7 +194,7 @@ class IndexServiceTest {
         existingMusic.addChildren(List.of(album1, album2));
         root.addChildren(List.of(existingMusic));
 
-        new IndexService(indexPath).index(root, List.of(music));
+        indexService(indexPath).index(root, List.of(music));
 
         assertEquals(List.of("album1", "album2"), existingMusic.getChildren().stream()
                 .map(IndexItem::getName)
@@ -219,7 +222,7 @@ class IndexServiceTest {
         album3.setParent(root);
         root.addChildren(List.of(album1, album2, album3));
 
-        new IndexService(indexPath).index(root, List.of(album1Path, album2Path));
+        indexService(indexPath).index(root, List.of(album1Path, album2Path));
 
         assertEquals(List.of("album1", "album2"), root.getChildren().stream()
                 .map(IndexItem::getName)
@@ -249,7 +252,7 @@ class IndexServiceTest {
         existingMusic.addChildren(List.of(album));
         root.addChildren(List.of(existingMusic));
 
-        new IndexService(indexPath).index(root, List.of(music));
+        indexService(indexPath).index(root, List.of(music));
 
         assertEquals(List.of("song1.mp3"), album.getChildren().stream()
                 .map(IndexItem::getName)
@@ -279,7 +282,7 @@ class IndexServiceTest {
         existingMusic.addChildren(List.of(album));
         root.addChildren(List.of(existingMusic));
 
-        new IndexService(indexPath).index(root, List.of(music));
+        indexService(indexPath).index(root, List.of(music));
 
         assertEquals(List.of("song.mp3"), album.getChildren().stream()
                 .map(IndexItem::getName)
@@ -297,7 +300,7 @@ class IndexServiceTest {
         Path otherSong = Files.createFile(other.resolve("other.mp3"));
         Path indexPath = tempDir.resolve("index.dat");
         RootIndexItem root = new RootIndexItem();
-        IndexService indexService = new IndexService(indexPath);
+        IndexService indexService = indexService(indexPath);
         indexService.index(root, List.of(music, other));
         IndexItem musicItem = root.getChildren().stream()
                 .filter(item -> item.getName().equals("music"))
@@ -335,7 +338,7 @@ class IndexServiceTest {
         Path indexPath = tempDir.resolve("index.dat");
 
         RootIndexItem root = new RootIndexItem();
-        new IndexService(indexPath).index(root, List.of(music));
+        indexService(indexPath).index(root, List.of(music));
         IndexItem directory = root.getChildren().getFirst();
         IndexItem file = directory.getChildren().getFirst();
 
@@ -352,7 +355,7 @@ class IndexServiceTest {
         Path relativeMusic = tempDir.relativize(music);
 
         RootIndexItem root = new RootIndexItem();
-        new IndexService(indexPath).index(root, List.of(tempDir.resolve(relativeMusic).resolve(".")));
+        indexService(indexPath).index(root, List.of(tempDir.resolve(relativeMusic).resolve(".")));
 
         IndexItem directory = root.getChildren().getFirst();
         IndexItem file = directory.getChildren().getFirst();
@@ -377,7 +380,7 @@ class IndexServiceTest {
         Path indexPath = tempDir.resolve("index.dat");
 
         RootIndexItem root = new RootIndexItem();
-        new IndexService(indexPath).index(root, List.of(music));
+        indexService(indexPath).index(root, List.of(music));
         IndexItem directory = root.getChildren().getFirst();
         IndexItem file = directory.getChildren().getFirst();
 
@@ -388,11 +391,70 @@ class IndexServiceTest {
     }
 
     @Test
+    void readsMetadataWhenIndexingSoundFiles() throws IOException {
+        Path music = Files.createDirectory(tempDir.resolve("music"));
+        Path song = Files.createFile(music.resolve("song.mp3"));
+        Path indexPath = tempDir.resolve("index.dat");
+        SoundFileMetadata metadata = new SoundFileMetadata(
+                "MPEG",
+                song.toAbsolutePath().normalize().toString(),
+                "song.mp3",
+                null,
+                "Song Title",
+                8,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+        MetadataReaderService metadataReaderService = new MetadataReaderService() {
+            @Override
+            public SoundFileMetadata readMetadata(Path path) {
+                assertEquals(song.toAbsolutePath().normalize(), path);
+                return metadata;
+            }
+        };
+        RootIndexItem root = new RootIndexItem();
+
+        new IndexService(indexPath, metadataReaderService).index(root, List.of(music));
+
+        SoundFileIndexItem indexedSong = assertInstanceOf(
+                SoundFileIndexItem.class,
+                root.getChildren().getFirst().getChildren().getFirst());
+        assertSame(metadata, indexedSong.getMetadata());
+    }
+
+    @Test
     void notifiesListenersAfterSuccessfulIndex() throws IOException {
         Path music = Files.createDirectory(tempDir.resolve("music"));
         Path indexPath = tempDir.resolve("index.dat");
         RootIndexItem root = new RootIndexItem();
-        IndexService indexService = new IndexService(indexPath);
+        IndexService indexService = indexService(indexPath);
         AtomicReference<RootIndexItem> notifiedRoot = new AtomicReference<>();
         indexService.addIndexListener(notifiedRoot::set);
 
@@ -407,5 +469,9 @@ class IndexServiceTest {
                 .replace("\r", "\\r")
                 .replace("\n", "\\n")
                 .replace("|", "\\|");
+    }
+
+    private IndexService indexService(Path indexPath) {
+        return new IndexService(indexPath, new MetadataReaderService());
     }
 }

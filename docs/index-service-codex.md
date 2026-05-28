@@ -29,9 +29,9 @@ implementations, error handling, and change contracts.
 `IndexService` scans filesystem paths, returns a tree of `IndexItem` nodes under a
 virtual `RootIndexItem`, and writes the resulting tree to `index.dat`.
 `IndexReaderService` reads `index.dat` back into the same tree model. The indexing
-package is responsible for filesystem traversal and index persistence only. It
-filters files by supported audio extension, but does not read audio metadata,
-build Swing tree nodes, or connect the index to the player.
+package is responsible for filesystem traversal, index persistence, and attaching
+metadata read by `MetadataReaderService` to sound-file nodes. It does not build
+Swing tree nodes or connect the index to the player.
 
 The current implementation treats non-directory paths as `SoundFileIndexItem`
 only when their extension is listed in `SoundFileType.EXTENSIONS`.
@@ -41,13 +41,13 @@ only when their extension is listed in `SoundFileType.EXTENSIONS`.
 ### Constructors
 
 ```java
-public IndexService(Path indexPath)
+public IndexService(Path indexPath, MetadataReaderService metadataReaderService)
 public void addIndexListener(Consumer<RootIndexItem> listener)
 public void removeIndexListener(Consumer<RootIndexItem> listener)
 ```
 
-The `Path` constructor injects the output file location and is used by tests to
-avoid writing a project-local runtime file.
+The constructor injects the output file location and the metadata reader used
+when creating sound-file nodes.
 Listeners are notified with the supplied `RootIndexItem` after a successful
 `index(...)` call and after the index has been written.
 
@@ -116,6 +116,8 @@ Current flow:
 6. Directory children recurse through `mergeDirectory(...)`.
 7. Supported non-directory children create a `SoundFileIndexItem` only when a
    same-name `SoundFileIndexItem` is not already present under the parent.
+   `MetadataReaderService.readMetadata(path)` is called for new sound-file nodes;
+   metadata read failures keep the file indexed with empty metadata.
 8. After merging a directory, its children are sorted by
    `IndexItem.getName()` with `String.CASE_INSENSITIVE_ORDER`.
 9. If a newly-created directory cannot be listed because of `IOException` or
@@ -250,7 +252,9 @@ Behavior:
 - `hasChildren()` returns `false`;
 - `parent` is set by `IndexService`;
 - `IndexService` creates this node only for files with extensions listed in
-  `SoundFileType.EXTENSIONS`.
+  `SoundFileType.EXTENSIONS`;
+- `getMetadata()` returns `SoundFileMetadata` read during indexing, or empty
+  metadata when the file was read from `index.dat` or metadata reading failed.
 
 ### UnreadableIndexItem
 
@@ -304,8 +308,8 @@ When changing this area, keep these rules:
   `RootIndexItem`, `DirectoryIndexItem`, `SoundFileIndexItem`, and
   `UnreadableIndexItem`.
 - If supported sound-file extensions change, update `SoundFileType.EXTENSIONS`.
-- If `SoundFileIndexItem` starts holding metadata or `pl.khuzzuk.player.SoundFile`,
-  document the ownership boundary between indexing and playback.
+- Keep `SoundFileIndexItem` metadata as indexing-owned `SoundFileMetadata`;
+  playback-specific state belongs outside the indexing package.
 - Preserve parent links unless the caller contract is explicitly changed. Direct
   children of `RootIndexItem` should use that root as their parent.
 - Preserve synchronization semantics for `index(RootIndexItem, List<Path>)`:
@@ -333,8 +337,8 @@ When changing this area, keep these rules:
 - There are no tests for unreadable directory behavior because reliable permission
   manipulation is platform-dependent.
 - `RootIndexItem.getChildren()` exposes a mutable list.
-- `IndexService` validates files by extension only. It does not inspect file
-  content or audio metadata before creating a `SoundFileIndexItem`.
+- `IndexService` validates files by extension only. Metadata read failures do not
+  reject a supported file; the node is kept with empty metadata.
 - `DirectoryIndexItem.getChildren()` exposes a mutable list.
 - `UnreadableIndexItem` does not store the exception or reason why reading failed.
 - Symbolic links are not handled specially. `Files.isDirectory(path)` follows links
@@ -383,8 +387,9 @@ Paste this block when Codex needs to work on indexing:
 
 ```text
 The Music Manager project has `pl.khuzzuk.index.IndexService`.
-`IndexService` has an `IndexService(Path indexPath)` constructor for injecting the
-output file.
+`IndexService` has an `IndexService(Path indexPath, MetadataReaderService
+metadataReaderService)` constructor for injecting the output file and metadata
+reader.
 `IndexService.index(RootIndexItem, List<Path>)` is the public indexing entry point.
 Callers must create and pass the `RootIndexItem`; the service mutates and returns
 that supplied root, synchronizing it with current filesystem entries by adding
@@ -402,7 +407,9 @@ Missing directory and supported sound-file nodes are added with parent links;
 stale nodes not present in the current root paths or scanned indexable directory
 listings are removed.
 Directory and sound-file items created by `IndexService` expose absolute normalized
-paths through `getPath()`. `UnreadableIndexItem.getPath()` returns its parent path.
+paths through `getPath()`. New sound-file items also hold `SoundFileMetadata`
+read through `MetadataReaderService`, falling back to empty metadata on read
+failure. `UnreadableIndexItem.getPath()` returns its parent path.
 After building the tree, IndexService writes `index.dat` as UTF-8 text lines
 without explicit depth. Directories, including root, are written as
 `D|escaped-normalized-path`; sound files are written as bare escaped normalized
@@ -423,7 +430,7 @@ Implementations:
 - DirectoryIndexItem: readable directory created from a Path, isDirectory true,
   mutable children, getName() derived from path file name.
 - SoundFileIndexItem: non-directory leaf created from a Path, isDirectory false,
-  empty children, getName() derived from path file name.
+  empty children, getName() derived from path file name, metadata attached.
 - UnreadableIndexItem: leaf used when reading/listing a path fails.
 
 Traversal:
