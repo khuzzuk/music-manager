@@ -155,23 +155,25 @@ carriage return, newline, and `|`.
 ### IndexReaderService
 
 ```java
-public IndexReaderService(Path indexPath)
+public IndexReaderService(Path indexPath, MetadataReaderService metadataReaderService)
 public RootIndexItem read() throws IOException
 public RootIndexItem getCurrentRootIndexItem()
 ```
 
-The `Path` constructor injects the input file location. `read()` reads UTF-8
-lines, ignores empty lines, expects the first non-empty entry to be `D|root`,
-reconstructs the tree with parent links by matching each item path to a persisted
-directory parent path, stores the reconstructed root as the current root, and
-returns it. `getCurrentRootIndexItem()` returns the most recently read root, or an
-empty `RootIndexItem` before the first successful read.
+The constructor injects the input file location and metadata reader. `read()`
+reads UTF-8 lines, ignores empty lines, expects the first non-empty entry to be
+`D|root`, reconstructs the tree with parent links by matching each item path to a
+persisted directory parent path, reads metadata for sound-file entries, stores the
+reconstructed root as the current root, and returns it. `getCurrentRootIndexItem()`
+returns the most recently read root, or an empty `RootIndexItem` before the first
+successful read.
 
 Reader parsing rules:
 
 - `D|root` creates the returned `RootIndexItem`;
 - `D|path` creates a `DirectoryIndexItem` from the full path;
-- a bare escaped path creates a `SoundFileIndexItem`;
+- a bare escaped path creates a `SoundFileIndexItem` with metadata read through
+  `MetadataReaderService`, or empty metadata when reading fails;
 - an item's parent is the existing directory whose path equals the item's
   `Path.getParent()`, or root when no persisted parent directory exists;
 - a bare file line before root, a non-root first directory, or an invalid trailing
@@ -253,8 +255,8 @@ Behavior:
 - `parent` is set by `IndexService`;
 - `IndexService` creates this node only for files with extensions listed in
   `SoundFileType.EXTENSIONS`;
-- `getMetadata()` returns `SoundFileMetadata` read during indexing, or empty
-  metadata when the file was read from `index.dat` or metadata reading failed.
+- `getMetadata()` returns `SoundFileMetadata` read during indexing or
+  `IndexReaderService.read()`, or empty metadata when metadata reading failed.
 
 ### UnreadableIndexItem
 
@@ -416,9 +418,11 @@ without explicit depth. Directories, including root, are written as
 paths. Root is written as `D|root` and is preceded by one empty line. Unreadable
 nodes are not persisted.
 
-`IndexReaderService` has an `IndexReaderService(Path indexPath)` constructor and
-`read() throws IOException`. It reads `D|...` directory path lines and bare
-sound-file path lines into a `RootIndexItem` tree with parent links.
+`IndexReaderService` has an `IndexReaderService(Path indexPath,
+MetadataReaderService metadataReaderService)` constructor and `read() throws
+IOException`. It reads `D|...` directory path lines and bare sound-file path lines
+into a `RootIndexItem` tree with parent links and metadata attached to sound-file
+nodes.
 
 Node interface:
 IndexItem has isDirectory(), getName(), getPath(), getChildren(), hasChildren(),

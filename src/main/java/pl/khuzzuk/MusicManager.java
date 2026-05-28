@@ -35,7 +35,7 @@ public class MusicManager {
             metadataReaderService = new MetadataReaderService();
             createIndexFileIfMissing();
             indexService = new IndexService(INDEX_PATH, metadataReaderService);
-            indexReaderService = new IndexReaderService(INDEX_PATH);
+            indexReaderService = new IndexReaderService(INDEX_PATH, metadataReaderService);
             indexReaderService.read();
         } catch (IOException e) {
             JOptionPane.showMessageDialog(

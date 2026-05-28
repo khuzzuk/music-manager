@@ -1,6 +1,7 @@
 package pl.khuzzuk.index;
 
 import pl.khuzzuk.metadata.MetadataReaderService;
+import pl.khuzzuk.metadata.SoundFileMetadata;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -40,7 +41,7 @@ class IndexReaderServiceTest {
                         + IndexItem.LINE_SEPARATOR
                         + IndexItem.LINE_SEPARATOR);
 
-        RootIndexItem root = new IndexReaderService(indexPath).read();
+        RootIndexItem root = indexReaderService(indexPath).read();
 
         assertEquals(IndexItem.ROOT_NAME, root.getName());
         assertNull(root.getParent());
@@ -85,7 +86,7 @@ class IndexReaderServiceTest {
                         + IndexItem.LINE_SEPARATOR
                         + IndexItem.LINE_SEPARATOR);
 
-        RootIndexItem root = new IndexReaderService(indexPath).read();
+        RootIndexItem root = indexReaderService(indexPath).read();
 
         IndexItem musicItem = root.getChildren().getFirst();
         assertEquals("music archive", musicItem.getName());
@@ -102,7 +103,7 @@ class IndexReaderServiceTest {
         Path indexPath = tempDir.resolve("index.dat");
 
         new IndexService(indexPath, new MetadataReaderService()).index(new RootIndexItem(), List.of(music));
-        RootIndexItem root = new IndexReaderService(indexPath).read();
+        RootIndexItem root = indexReaderService(indexPath).read();
 
         IndexItem indexedMusic = root.getChildren().getFirst();
         assertEquals("music", indexedMusic.getName());
@@ -115,11 +116,74 @@ class IndexReaderServiceTest {
     }
 
     @Test
+    void readsMetadataForSoundFilesFromIndexFile() throws IOException {
+        Path indexPath = tempDir.resolve("index.dat");
+        Path music = tempDir.resolve("music").toAbsolutePath().normalize();
+        Path song = music.resolve("song.mp3").toAbsolutePath().normalize();
+        Files.writeString(indexPath,
+                IndexItem.LINE_SEPARATOR
+                        + IndexItem.DIRECTORY_PREFIX + IndexItem.ROOT_NAME + IndexItem.LINE_SEPARATOR
+                        + IndexItem.DIRECTORY_PREFIX + escape(music.toString()) + IndexItem.LINE_SEPARATOR
+                        + escape(song.toString()) + IndexItem.LINE_SEPARATOR);
+        SoundFileMetadata metadata = new SoundFileMetadata(
+                "MPEG",
+                song.toString(),
+                "song.mp3",
+                null,
+                "Song Title",
+                7,
+                null,
+                null,
+                null,
+                "Album",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "Calm",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+        MetadataReaderService metadataReaderService = new MetadataReaderService() {
+            @Override
+            public SoundFileMetadata readMetadata(Path path) {
+                assertEquals(song, path);
+                return metadata;
+            }
+        };
+
+        RootIndexItem root = new IndexReaderService(indexPath, metadataReaderService).read();
+
+        SoundFileIndexItem indexedSong = assertInstanceOf(
+                SoundFileIndexItem.class,
+                root.getChildren().getFirst().getChildren().getFirst());
+        assertSame(metadata, indexedSong.getMetadata());
+    }
+
+    @Test
     void readsEmptyIndexFileAsEmptyRoot() throws IOException {
         Path indexPath = tempDir.resolve("index.dat");
         Files.createFile(indexPath);
 
-        RootIndexItem root = new IndexReaderService(indexPath).read();
+        RootIndexItem root = indexReaderService(indexPath).read();
 
         assertEquals(IndexItem.ROOT_NAME, root.getName());
         assertNull(root.getParent());
@@ -132,7 +196,7 @@ class IndexReaderServiceTest {
         Files.writeString(indexPath,
                 IndexItem.LINE_SEPARATOR
                         + IndexItem.DIRECTORY_PREFIX + IndexItem.ROOT_NAME + IndexItem.LINE_SEPARATOR);
-        IndexReaderService indexReaderService = new IndexReaderService(indexPath);
+        IndexReaderService indexReaderService = indexReaderService(indexPath);
 
         RootIndexItem root = indexReaderService.read();
 
@@ -145,5 +209,9 @@ class IndexReaderServiceTest {
                 .replace("\r", "\\r")
                 .replace("\n", "\\n")
                 .replace("|", "\\|");
+    }
+
+    private IndexReaderService indexReaderService(Path indexPath) {
+        return new IndexReaderService(indexPath, new MetadataReaderService());
     }
 }
