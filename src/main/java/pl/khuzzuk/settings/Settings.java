@@ -12,9 +12,11 @@ public record Settings(
         String lastTreePosition,
         String lastPlaylist,
         List<Path> indexedPaths,
-        Path lastChoosenPath) {
+        Path lastChoosenPath,
+        List<TrackColumn> trackColumns) {
     public Settings {
         indexedPaths = indexedPaths == null ? List.of() : List.copyOf(indexedPaths);
         lastChoosenPath = lastChoosenPath == null ? Path.of("") : lastChoosenPath;
+        trackColumns = trackColumns == null ? List.of() : List.copyOf(trackColumns);
     }
 }

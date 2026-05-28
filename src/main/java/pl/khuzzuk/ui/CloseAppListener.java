@@ -31,7 +31,8 @@ public class CloseAppListener extends WindowAdapter {
                 oldSettings.lastTreePosition(),
                 oldSettings.lastPlaylist(),
                 oldSettings.indexedPaths(),
-                oldSettings.lastChoosenPath());
+                oldSettings.lastChoosenPath(),
+                oldSettings.trackColumns());
         try {
             settingsService.saveSettings(newSettings);
         } catch (IOException ex) {

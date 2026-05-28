@@ -19,7 +19,7 @@ public class MainWindow extends JFrame {
         setBounds(settings.windowX(),  settings.windowY(), settings.windowWidth(), settings.windowHeight());
 
         setLayout(new BorderLayout(5, 5));
-        ContentPane contentPane = new ContentPane(indexReaderService, indexService);
+        ContentPane contentPane = new ContentPane(settingsService, indexReaderService, indexService);
         add(contentPane, BorderLayout.CENTER);
         PlayerPane playerPane = new PlayerPane();
         add(playerPane, BorderLayout.SOUTH);

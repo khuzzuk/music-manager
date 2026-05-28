@@ -11,6 +11,8 @@ The class in this repository is named `SettingsService`, not `SettingService`.
 - `src/main/java/pl/khuzzuk/settings/SettingsService.java` - reads and writes
   settings.
 - `src/main/java/pl/khuzzuk/settings/Settings.java` - immutable settings record.
+- `src/main/java/pl/khuzzuk/settings/TrackColumn.java` - track-table column name
+  and width.
 - `src/main/java/pl/khuzzuk/settings/SettingsToPropertiesMapper.java` - maps
   between `Settings` and `java.util.Properties`.
 - `settings.properties` - settings file created and overwritten by the service.
@@ -135,7 +137,8 @@ public record Settings(
         String lastTreePosition,
         String lastPlaylist,
         List<Path> indexedPaths,
-        Path lastChoosenPath) {
+        Path lastChoosenPath,
+        List<TrackColumn> trackColumns) {
 }
 ```
 
@@ -147,6 +150,8 @@ The compact constructor normalizes nullable path fields:
 - `indexedPaths == null` becomes `List.of()`;
 - otherwise `indexedPaths` is copied with `List.copyOf(...)`;
 - `lastChoosenPath == null` becomes `Path.of("")`.
+- `trackColumns == null` becomes `List.of()`;
+- otherwise `trackColumns` is copied with `List.copyOf(...)`.
 
 ## Property Keys
 
@@ -163,11 +168,15 @@ The mapper uses these keys:
 | `lastPlaylist` | `last.playlist` | empty string |
 | `indexedPaths` | `indexed.paths` | empty string |
 | `lastChoosenPath` | `last.choosen.path` | empty path |
+| `trackColumns` | `track.columns` | `title:220;album:180;composer:160;rating:70;mood:120;movement:120;occasion:120` |
 
 `lastChoosenPath` intentionally uses the current field spelling from code.
 `indexedPaths` is stored as one property joined with `File.pathSeparator`, which is
 the standard Java separator for lists of paths (`;` on Windows, `:` on Unix-like
 systems).
+`trackColumns` is stored as one property where each column is `name:width` and
+columns are separated with `;`. Column names are stable metadata keys used by
+`TracksTable`.
 
 Example:
 
@@ -175,6 +184,7 @@ Example:
 #Settings
 #Tue May 26 20:58:28 CEST 2026
 indexed.paths=C\:\\Music;D\:\\Archive\\Music
+track.columns=title:220;album:180;composer:160;rating:70;mood:120;movement:120;occasion:120
 last.playlist=
 last.tree.position=
 last.choosen.path=C\:\\Music
@@ -198,11 +208,11 @@ window.y=150
 7. `MainMenuBar` opens `IndexDirectoriesDialog` from the Index menu.
 8. `IndexDirectoriesDialog` lists current `indexedPaths` and lets the user add a
    directory with `JFileChooser` starting from `lastChoosenPath`.
-9. `ContentPane` passes `SettingsService` to `FileTree`, and `FileTree` displays
-   directory names derived from `settings.indexedPaths()`.
+9. `ContentPane` reads `settings.trackColumns()` and creates `TracksTable` with
+   the configured visible metadata columns and widths.
 10. `CloseAppListener.windowClosing(...)` reads the current window `bounds`, combines
    them with the previous `maximizedWindow`, `lastTreePosition`, `lastPlaylist`,
-   `indexedPaths`, and `lastChoosenPath` values, then calls
+  `indexedPaths`, `lastChoosenPath`, and `trackColumns` values, then calls
    `settingsService.saveSettings(newSettings)`.
 
 ## Change Contracts
@@ -232,6 +242,8 @@ Change these together:
 - `SettingsToPropertiesMapper` - add the key constant, read with a default value,
   and write to `Properties`.
 - Places that call `new Settings(...)`, especially `CloseAppListener`.
+- UI components that consume the setting, such as `TracksTable` for
+  `trackColumns`.
 - This document - update the key table and application flow if the new field matters
   outside the mapper.
 
@@ -270,7 +282,7 @@ overwrites the file, and updates `this.settings` after a successful write.
 
 `Settings` is a record:
 windowX, windowY, windowWidth, windowHeight, maximizedWindow, lastTreePosition,
-lastPlaylist, indexedPaths, lastChoosenPath.
+lastPlaylist, indexedPaths, lastChoosenPath, trackColumns.
 
 Mapper keys:
 window.x=windowX default 100
@@ -282,6 +294,8 @@ last.tree.position=lastTreePosition default ""
 last.playlist=lastPlaylist default ""
 indexed.paths=indexedPaths joined with File.pathSeparator default ""
 last.choosen.path=lastChoosenPath default empty path
+track.columns=trackColumns formatted as name:width entries joined with ; default
+title:220;album:180;composer:160;rating:70;mood:120;movement:120;occasion:120
 
 Integration:
 MusicManager creates SettingsService.
@@ -289,8 +303,7 @@ MainWindow reads settings and applies window bounds.
 MainMenuBar receives SettingsService in its constructor and opens
 IndexDirectoriesDialog. IndexDirectoriesDialog shows indexedPaths and adds
 directories through JFileChooser starting from lastChoosenPath.
-ContentPane passes SettingsService to FileTree, and FileTree displays directory
-names from Settings.indexedPaths().
+ContentPane uses Settings.trackColumns() to configure TracksTable columns.
 CloseAppListener saves bounds when the application closes.
 
 When adding a settings field, change Settings, SettingsToPropertiesMapper, places

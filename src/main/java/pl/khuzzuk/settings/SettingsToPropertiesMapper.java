@@ -9,6 +9,14 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class SettingsToPropertiesMapper {
+    public static final List<TrackColumn> DEFAULT_TRACK_COLUMNS = List.of(
+            new TrackColumn("title", 220),
+            new TrackColumn("album", 180),
+            new TrackColumn("composer", 160),
+            new TrackColumn("rating", 70),
+            new TrackColumn("mood", 120),
+            new TrackColumn("movement", 120),
+            new TrackColumn("occasion", 120));
     private static final String WINDOW_X_PROPERTY = "window.x";
     private static final String WINDOW_Y_PROPERTY = "window.y";
     private static final String WINDOW_WIDTH_PROPERTY = "window.width";
@@ -18,6 +26,7 @@ public class SettingsToPropertiesMapper {
     private static final String LAST_PLAYLIST_PROPERTY = "last.playlist";
     private static final String INDEXED_PATHS_PROPERTY = "indexed.paths";
     private static final String LAST_CHOOSEN_PATH_PROPERTY = "last.choosen.path";
+    private static final String TRACK_COLUMNS_PROPERTY = "track.columns";
 
     public Settings toSettings(Properties prop) {
         return new Settings(
@@ -29,7 +38,8 @@ public class SettingsToPropertiesMapper {
                 prop.getProperty(LAST_TREE_POSITION_PROPERTY, ""),
                 prop.getProperty(LAST_PLAYLIST_PROPERTY, ""),
                 getPaths(prop),
-                Path.of(prop.getProperty(LAST_CHOOSEN_PATH_PROPERTY, ""))
+                Path.of(prop.getProperty(LAST_CHOOSEN_PATH_PROPERTY, "")),
+                getTrackColumns(prop)
         );
     }
 
@@ -46,6 +56,9 @@ public class SettingsToPropertiesMapper {
                 .map(Path::toString)
                 .collect(Collectors.joining(File.pathSeparator)));
         prop.setProperty(LAST_CHOOSEN_PATH_PROPERTY, settings.lastChoosenPath().toString());
+        prop.setProperty(TRACK_COLUMNS_PROPERTY, settings.trackColumns().stream()
+                .map(column -> column.name() + ":" + column.width())
+                .collect(Collectors.joining(";")));
         return prop;
     }
 
@@ -58,6 +71,26 @@ public class SettingsToPropertiesMapper {
                 .filter(path -> !path.isBlank())
                 .map(Path::of)
                 .toList();
+    }
+
+    private static List<TrackColumn> getTrackColumns(Properties prop) {
+        String columns = prop.getProperty(TRACK_COLUMNS_PROPERTY, "");
+        if (columns.isBlank()) {
+            return DEFAULT_TRACK_COLUMNS;
+        }
+
+        List<TrackColumn> trackColumns = Arrays.stream(columns.split(";"))
+                .map(SettingsToPropertiesMapper::toTrackColumn)
+                .filter(column -> !column.name().isBlank())
+                .toList();
+        return trackColumns.isEmpty() ? DEFAULT_TRACK_COLUMNS : trackColumns;
+    }
+
+    private static TrackColumn toTrackColumn(String value) {
+        String[] parts = value.split(":", 2);
+        String name = parts[0].trim();
+        int width = parts.length == 2 ? getInt(parts[1].trim(), 120) : 120;
+        return new TrackColumn(name, width);
     }
 
     private static int getInt(String prop, int defaultValue) {
