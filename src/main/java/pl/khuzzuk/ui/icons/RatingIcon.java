@@ -1,4 +1,4 @@
-package pl.khuzzuk.ui;
+package pl.khuzzuk.ui.icons;
 
 import javax.swing.Icon;
 import java.awt.BasicStroke;

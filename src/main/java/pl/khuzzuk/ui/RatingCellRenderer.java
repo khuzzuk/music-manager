@@ -1,5 +1,7 @@
 package pl.khuzzuk.ui;
 
+import pl.khuzzuk.ui.icons.RatingIcon;
+
 import javax.swing.JLabel;
 import javax.swing.JTable;
 import javax.swing.SwingConstants;

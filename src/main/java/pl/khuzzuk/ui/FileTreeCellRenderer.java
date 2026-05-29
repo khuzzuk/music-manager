@@ -1,5 +1,7 @@
 package pl.khuzzuk.ui;
 
+import pl.khuzzuk.ui.icons.DirectoryIcon;
+
 import javax.swing.Icon;
 import javax.swing.JComponent;
 import javax.swing.JTree;

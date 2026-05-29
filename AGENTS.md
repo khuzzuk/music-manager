@@ -1,7 +1,9 @@
 # Codex project notes
 
 All `Service` instances should be created in `MusicManager.initComponents()` and
-passed to dependent classes through constructors.
+collected into a single `Context` instance. Classes that depend on services should
+receive the full `Context` through their constructors instead of separate service
+parameters.
 
 Object-to-object mapping logic should live in a dedicated Mapper class. For
 example, mapping `SoundFileMetadata` to a Lucene `Document` should be handled by a

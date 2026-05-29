@@ -1,5 +1,6 @@
 package pl.khuzzuk.ui;
 
+import pl.khuzzuk.Context;
 import pl.khuzzuk.index.IndexReaderService;
 import pl.khuzzuk.index.IndexService;
 import pl.khuzzuk.index.RootIndexItem;
@@ -27,15 +28,11 @@ public class IndexDirectoriesDialog extends JDialog {
     private final IndexService indexService;
     private final IndexReaderService indexReaderService;
 
-    public IndexDirectoriesDialog(
-            Window owner,
-            SettingsService settingsService,
-            IndexService indexService,
-            IndexReaderService indexReaderService) {
+    public IndexDirectoriesDialog(Window owner, Context context) {
         super(owner, "Indeksowane katalogi");
-        this.settingsService = settingsService;
-        this.indexService = indexService;
-        this.indexReaderService = indexReaderService;
+        this.settingsService = context.settingsService();
+        this.indexService = context.indexService();
+        this.indexReaderService = context.indexReaderService();
         setSize(500, 300);
     }
 
@@ -55,7 +52,7 @@ public class IndexDirectoriesDialog extends JDialog {
         add(new JScrollPane(indexedPathsList), BorderLayout.CENTER);
 
         JButton addButton = new JButton("Dodaj");
-        addButton.addActionListener(event -> addIndexDirectory());
+        addButton.addActionListener(ignored -> addIndexDirectory());
         JPanel buttonPanel = new JPanel();
         buttonPanel.add(addButton);
         add(buttonPanel, BorderLayout.SOUTH);

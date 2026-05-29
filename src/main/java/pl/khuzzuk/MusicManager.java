@@ -4,11 +4,14 @@ import pl.khuzzuk.initialization.LoadingScreen;
 import pl.khuzzuk.index.IndexReaderService;
 import pl.khuzzuk.index.IndexService;
 import pl.khuzzuk.metadata.DocumentMapper;
+import pl.khuzzuk.metadata.MetadataFieldKeyMapper;
 import pl.khuzzuk.metadata.MetadataReaderService;
 import pl.khuzzuk.metadata.MetadataIndexWriterService;
 import pl.khuzzuk.metadata.MetadataWriterService;
 import pl.khuzzuk.metadata.MoodConverter;
 import pl.khuzzuk.metadata.SoundFileMetadataMapper;
+import pl.khuzzuk.player.MP3Player;
+import pl.khuzzuk.player.SoundPlayer;
 import pl.khuzzuk.settings.SettingsService;
 import pl.khuzzuk.settings.SettingsToPropertiesMapper;
 import pl.khuzzuk.ui.MainWindow;
@@ -22,15 +25,7 @@ import java.nio.file.Path;
 public class MusicManager {
     private static final Path INDEX_PATH = Path.of("index.dat");
     private static final Path METADATA_INDEX_PATH = Path.of("metadata-index");
-    public static SettingsService settingsService;
-    public static MoodConverter moodConverter;
-    public static SoundFileMetadataMapper soundFileMetadataMapper;
-    public static MetadataReaderService metadataReaderService;
-    public static MetadataWriterService metadataWriterService;
-    public static MetadataIndexWriterService metadataIndexWriterService;
-    public static DocumentMapper documentMapper;
-    public static IndexService indexService;
-    public static IndexReaderService indexReaderService;
+    public static Context context;
 
     static void main() {
         SwingUtilities.invokeLater(MusicManager::initComponents);
@@ -42,17 +37,28 @@ public class MusicManager {
         loadingScreen.setVisible(true);
 
         try {
-            settingsService = new SettingsService(new SettingsToPropertiesMapper());
-            moodConverter = new MoodConverter();
-            soundFileMetadataMapper = new SoundFileMetadataMapper(moodConverter);
-            metadataReaderService = new MetadataReaderService(soundFileMetadataMapper);
-            metadataWriterService = new MetadataWriterService();
-            documentMapper = new DocumentMapper();
-            metadataIndexWriterService = new MetadataIndexWriterService(METADATA_INDEX_PATH, documentMapper);
+            SettingsService settingsService = new SettingsService(new SettingsToPropertiesMapper());
+            MoodConverter moodConverter = new MoodConverter();
+            SoundFileMetadataMapper soundFileMetadataMapper = new SoundFileMetadataMapper(moodConverter);
+            MetadataReaderService metadataReaderService = new MetadataReaderService(soundFileMetadataMapper);
+            MetadataFieldKeyMapper metadataFieldKeyMapper = new MetadataFieldKeyMapper();
+            MetadataWriterService metadataWriterService = new MetadataWriterService(metadataFieldKeyMapper);
+            DocumentMapper documentMapper = new DocumentMapper();
+            MetadataIndexWriterService metadataIndexWriterService =
+                    new MetadataIndexWriterService(METADATA_INDEX_PATH, documentMapper);
             createIndexFileIfMissing();
-            indexService = new IndexService(INDEX_PATH, metadataReaderService, metadataIndexWriterService);
-            indexReaderService = new IndexReaderService(INDEX_PATH);
+            IndexService indexService = new IndexService(INDEX_PATH, metadataReaderService, metadataIndexWriterService);
+            IndexReaderService indexReaderService = new IndexReaderService(INDEX_PATH);
             indexReaderService.read();
+            SoundPlayer soundPlayer = new MP3Player();
+            context = new Context(
+                    settingsService,
+                    metadataReaderService,
+                    metadataWriterService,
+                    metadataIndexWriterService,
+                    indexService,
+                    indexReaderService,
+                    soundPlayer);
         } catch (IOException e) {
             JOptionPane.showMessageDialog(
                     loadingScreen,
@@ -66,13 +72,7 @@ public class MusicManager {
     }
 
     private static void showMainWindow() {
-        MainWindow mainWindow = new MainWindow(
-                settingsService,
-                indexService,
-                indexReaderService,
-                metadataReaderService,
-                metadataWriterService,
-                metadataIndexWriterService);
+        MainWindow mainWindow = new MainWindow(context);
         mainWindow.setVisible(true);
     }
 

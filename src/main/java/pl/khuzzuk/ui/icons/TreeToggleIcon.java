@@ -1,4 +1,4 @@
-package pl.khuzzuk.ui;
+package pl.khuzzuk.ui.icons;
 
 import javax.swing.Icon;
 import java.awt.BasicStroke;
@@ -8,11 +8,11 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 
-class TreeToggleIcon implements Icon {
+public class TreeToggleIcon implements Icon {
     private static final int SIZE = 16;
     private final boolean expanded;
 
-    TreeToggleIcon(boolean expanded) {
+    public TreeToggleIcon(boolean expanded) {
         this.expanded = expanded;
     }
 

@@ -1,14 +1,7 @@
 package pl.khuzzuk.ui;
 
-import pl.khuzzuk.index.IndexReaderService;
-import pl.khuzzuk.index.IndexService;
-import pl.khuzzuk.metadata.MetadataReaderService;
-import pl.khuzzuk.metadata.MetadataIndexWriterService;
-import pl.khuzzuk.metadata.MetadataWriterService;
-import pl.khuzzuk.player.PlaylistSoundFile;
-import pl.khuzzuk.settings.SettingsService;
+import pl.khuzzuk.Context;
 
-import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import java.awt.GridBagConstraints;
@@ -17,22 +10,11 @@ import java.awt.Insets;
 
 public class ContentPane extends JPanel {
 
-    public ContentPane(
-            SettingsService settingsService,
-            IndexReaderService indexReaderService,
-            IndexService indexService,
-            MetadataReaderService metadataReaderService,
-            MetadataWriterService metadataWriterService,
-            MetadataIndexWriterService metadataIndexWriterService) {
+    public ContentPane(Context context, PlaylistPane playlist) {
         super(new GridBagLayout());
 
-        TracksTable tracksTable = new TracksTable(
-                settingsService,
-                metadataReaderService,
-                metadataWriterService,
-                metadataIndexWriterService);
-        JList<PlaylistSoundFile> playlist = new JList<>();
-        FileTree fileTree = new FileTree(indexReaderService, indexService, tracksTable::showMappedFiles);
+        TracksTable tracksTable = new TracksTable(context, playlist::addTracks);
+        FileTree fileTree = new FileTree(context, tracksTable::showMappedFiles);
 
         GridBagConstraints c = new GridBagConstraints();
         c.fill = GridBagConstraints.BOTH;

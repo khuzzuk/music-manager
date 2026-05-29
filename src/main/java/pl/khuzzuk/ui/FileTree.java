@@ -1,9 +1,10 @@
 package pl.khuzzuk.ui;
 
+import pl.khuzzuk.Context;
 import pl.khuzzuk.index.IndexItem;
-import pl.khuzzuk.index.IndexReaderService;
 import pl.khuzzuk.index.IndexService;
 import pl.khuzzuk.index.RootIndexItem;
+import pl.khuzzuk.ui.icons.TreeToggleIcon;
 
 import javax.swing.AbstractAction;
 import javax.swing.Action;
@@ -33,12 +34,9 @@ public class FileTree extends JTree {
     private final IndexService indexService;
     private final Consumer<List<IndexItem>> selectedFilesConsumer;
 
-    public FileTree(
-            IndexReaderService indexReaderService,
-            IndexService indexService,
-            Consumer<List<IndexItem>> selectedFilesConsumer) {
-        super(createRoot(indexReaderService.getCurrentRootIndexItem()));
-        this.indexService = indexService;
+    public FileTree(Context context, Consumer<List<IndexItem>> selectedFilesConsumer) {
+        super(createRoot(context.indexReaderService().getCurrentRootIndexItem()));
+        this.indexService = context.indexService();
         this.selectedFilesConsumer = selectedFilesConsumer;
         setOpaque(false);
         setToggleClickCount(1);
@@ -49,7 +47,7 @@ public class FileTree extends JTree {
         setCellRenderer(new FileTreeCellRenderer());
         addMouseListener(new FileTreeSelectionListener());
         registerReindexSelectedDirectoryAction();
-        indexService.addIndexListener(root -> SwingUtilities.invokeLater(() -> refresh(root)));
+        this.indexService.addIndexListener(root -> SwingUtilities.invokeLater(() -> refresh(root)));
         expandRow(0);
     }
 

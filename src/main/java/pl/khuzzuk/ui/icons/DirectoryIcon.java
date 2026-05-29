@@ -1,19 +1,19 @@
-package pl.khuzzuk.ui;
+package pl.khuzzuk.ui.icons;
 
 import javax.swing.Icon;
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.BasicStroke;
 import java.awt.RenderingHints;
 
-class DirectoryIcon implements Icon {
+public class DirectoryIcon implements Icon {
     private static final int WIDTH = 30;
     private static final int HEIGHT = 28;
     private final boolean open;
 
-    DirectoryIcon(boolean open) {
+    public DirectoryIcon(boolean open) {
         this.open = open;
     }
 

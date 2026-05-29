@@ -1,5 +1,6 @@
 package pl.khuzzuk.ui;
 
+import pl.khuzzuk.Context;
 import pl.khuzzuk.settings.Settings;
 import pl.khuzzuk.settings.SettingsService;
 
@@ -13,9 +14,9 @@ public class CloseAppListener extends WindowAdapter {
     private final MainWindow mainWindow;
     private final SettingsService settingsService;
 
-    public CloseAppListener(MainWindow mainWindow, SettingsService settingsService) {
+    public CloseAppListener(MainWindow mainWindow, Context context) {
         this.mainWindow = mainWindow;
-        this.settingsService = settingsService;
+        this.settingsService = context.settingsService();
     }
 
     @Override

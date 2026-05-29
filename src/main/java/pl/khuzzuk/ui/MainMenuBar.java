@@ -1,8 +1,6 @@
 package pl.khuzzuk.ui;
 
-import pl.khuzzuk.index.IndexReaderService;
-import pl.khuzzuk.index.IndexService;
-import pl.khuzzuk.settings.SettingsService;
+import pl.khuzzuk.Context;
 
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
@@ -11,18 +9,14 @@ import javax.swing.SwingUtilities;
 import java.awt.Window;
 
 public class MainMenuBar extends JMenuBar {
-    private final SettingsService settingsService;
-    private final IndexService indexService;
-    private final IndexReaderService indexReaderService;
+    private final Context context;
     private IndexDirectoriesDialog indexDirectoriesDialog;
 
-    public MainMenuBar(SettingsService settingsService, IndexService indexService, IndexReaderService indexReaderService) {
-        this.settingsService = settingsService;
-        this.indexService = indexService;
-        this.indexReaderService = indexReaderService;
+    public MainMenuBar(Context context) {
+        this.context = context;
         JMenu menu = new JMenu("Plik");
         JMenuItem menuIndexItem = new JMenuItem("Indeks");
-        menuIndexItem.addActionListener(event -> chooseIndexDirectory());
+        menuIndexItem.addActionListener(ignored -> chooseIndexDirectory());
         menu.add(menuIndexItem);
         add(menu);
     }
@@ -30,7 +24,7 @@ public class MainMenuBar extends JMenuBar {
     private void chooseIndexDirectory() {
         if (indexDirectoriesDialog == null || !indexDirectoriesDialog.isDisplayable()) {
             Window owner = SwingUtilities.getWindowAncestor(this);
-            indexDirectoriesDialog = new IndexDirectoriesDialog(owner, settingsService, indexService, indexReaderService);
+            indexDirectoriesDialog = new IndexDirectoriesDialog(owner, context);
             indexDirectoriesDialog.setLocationRelativeTo(this);
         }
 

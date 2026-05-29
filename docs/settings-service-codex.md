@@ -18,8 +18,8 @@ The class in this repository is named `SettingsService`, not `SettingService`.
 - `src/main/java/pl/khuzzuk/settings/SettingsToPropertiesMapper.java` - maps
   between `Settings` and `java.util.Properties`.
 - `settings.properties` - settings file created and overwritten by the service.
-- `src/main/java/pl/khuzzuk/MusicManager.java` - creates the global service
-  instance.
+- `src/main/java/pl/khuzzuk/MusicManager.java` - creates services and collects
+  them into the global `Context` instance.
 - `src/main/java/pl/khuzzuk/ui/MainWindow.java` - reads window settings on startup.
 - `src/main/java/pl/khuzzuk/ui/MainMenuBar.java` - opens the indexed directory
   dialog from the Index menu.
@@ -203,19 +203,20 @@ window.y=150
 1. `MusicManager.initComponents()` creates
    `new SettingsService(new SettingsToPropertiesMapper())`.
 2. The service constructor loads or creates `settings.properties`.
-3. `MusicManager.showMainWindow()` passes the service to `MainWindow`.
-4. `MainWindow` calls `settingsService.getSettings()` and applies the window bounds
+3. `MusicManager.initComponents()` collects the service into `Context`.
+4. `MusicManager.showMainWindow()` passes `Context` to `MainWindow`.
+5. `MainWindow` calls `context.settingsService().getSettings()` and applies the window bounds
    with `setBounds(settings.windowX(), settings.windowY(), settings.windowWidth(), settings.windowHeight())`.
-5. `MainWindow` registers `CloseAppListener`.
-6. `MainWindow` creates `MainMenuBar(settingsService)`.
-7. `MainMenuBar` opens `IndexDirectoriesDialog` from the Index menu.
-8. `IndexDirectoriesDialog` lists current `indexedPaths` and lets the user add a
+6. `MainWindow` registers `CloseAppListener`.
+7. `MainWindow` creates `MainMenuBar(context)`.
+8. `MainMenuBar` opens `IndexDirectoriesDialog` from the Index menu.
+9. `IndexDirectoriesDialog` lists current `indexedPaths` and lets the user add a
    directory with `JFileChooser` starting from `lastChoosenPath`.
-9. `ContentPane` reads `settings.trackColumns()` and creates `TracksTable` with
+10. `ContentPane` reads `settings.trackColumns()` and creates `TracksTable` with
    the configured visible metadata columns and widths.
-10. `CloseAppListener.windowClosing(...)` reads the current window `bounds`, combines
+11. `CloseAppListener.windowClosing(...)` reads the current window `bounds`, combines
    them with the previous `maximizedWindow`, `lastTreePosition`, `lastPlaylist`,
-  `indexedPaths`, `lastChoosenPath`, and `trackColumns` values, then calls
+   `indexedPaths`, `lastChoosenPath`, and `trackColumns` values, then calls
    `settingsService.saveSettings(newSettings)`.
 
 ## Change Contracts
@@ -301,9 +302,9 @@ track.columns=trackColumns formatted as name:width entries joined with ; default
 title:220;album:180;composer:160;rating:70;mood:120;movement:120;occasion:120
 
 Integration:
-MusicManager creates SettingsService.
+MusicManager creates SettingsService and stores it in Context.
 MainWindow reads settings and applies window bounds.
-MainMenuBar receives SettingsService in its constructor and opens
+MainMenuBar receives Context in its constructor and opens
 IndexDirectoriesDialog. IndexDirectoriesDialog shows indexedPaths and adds
 directories through JFileChooser starting from lastChoosenPath.
 ContentPane uses Settings.trackColumns() to configure TracksTable columns.
