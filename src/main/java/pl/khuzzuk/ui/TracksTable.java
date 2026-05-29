@@ -19,6 +19,7 @@ import javax.swing.Action;
 import javax.swing.JOptionPane;
 import javax.swing.JTable;
 import javax.swing.KeyStroke;
+import javax.swing.SwingWorker;
 import javax.swing.SwingUtilities;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableColumnModel;
@@ -31,10 +32,12 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 public class TracksTable extends JTable {
     private static final String ADD_SELECTED_TO_PLAYLIST_ACTION = "addSelectedToPlaylist";
+    private static final String EDIT_SELECTED_METADATA_ACTION = "editSelectedMetadata";
     private final SettingsService settingsService;
     private final MetadataReaderService metadataReaderService;
     private final MetadataWriterService metadataWriterService;
@@ -46,6 +49,9 @@ public class TracksTable extends JTable {
     private List<TrackColumn> columns;
     private int previewRow = -1;
     private int previewModelColumn = -1;
+    private boolean updatingModel;
+    private SwingWorker<List<LoadedTrack>, Void> loadWorker;
+    private int loadGeneration;
 
     public TracksTable(Context context, Consumer<List<SoundFileMetadata>> selectedTracksConsumer) {
         this.settingsService = context.settingsService();
@@ -62,24 +68,121 @@ public class TracksTable extends JTable {
         addMouseMotionListener(ratingMouseListener);
         addMouseListener(ratingMouseListener);
         registerAddSelectedToPlaylistAction();
+        registerEditSelectedMetadataAction();
         showMappedFiles(List.of());
     }
 
     public void showMappedFiles(List<IndexItem> files) {
+        showMappedFiles(files, null);
+    }
+
+    public void showMappedFiles(List<IndexItem> files, Runnable loadedCallback) {
+        int generation = ++loadGeneration;
+        cancelLoadWorker();
         clearRatingPreview();
+
+        if (files == null || files.isEmpty()) {
+            showLoadedFiles(List.of());
+            notifyLoaded(loadedCallback);
+            return;
+        }
+
+        List<IndexItem> filesSnapshot = List.copyOf(files);
+        loadWorker = new SwingWorker<>() {
+            @Override
+            protected List<LoadedTrack> doInBackground() {
+                List<LoadedTrack> loadedTracks = new ArrayList<>();
+                for (IndexItem file : filesSnapshot) {
+                    if (isCancelled()) {
+                        return List.of();
+                    }
+
+                    SoundFileMetadata metadata;
+                    if (file instanceof SoundFileIndexItem soundFileIndexItem) {
+                        metadata = readMetadata(soundFileIndexItem);
+                    } else {
+                        metadata = SoundFileMetadata.empty(file.getPath());
+                    }
+
+                    loadedTracks.add(new LoadedTrack(file.getPath(), metadata));
+                }
+
+                return loadedTracks;
+            }
+
+            @Override
+            protected void done() {
+                if (isCancelled() || generation != loadGeneration) {
+                    return;
+                }
+
+                try {
+                    showLoadedFiles(get());
+                } catch (Exception e) {
+                    showLoadedFiles(List.of());
+                    JOptionPane.showMessageDialog(
+                            TracksTable.this,
+                            "Nie udalo sie wczytac metadanych.",
+                            "Blad odczytu",
+                            JOptionPane.ERROR_MESSAGE);
+                }
+                notifyLoaded(loadedCallback);
+            }
+        };
+        loadWorker.execute();
+    }
+
+    private void notifyLoaded(Runnable loadedCallback) {
+        if (loadedCallback != null) {
+            loadedCallback.run();
+        }
+    }
+
+    private void cancelLoadWorker() {
+        if (loadWorker != null && !loadWorker.isDone()) {
+            loadWorker.cancel(true);
+        }
+    }
+
+    private void showLoadedFiles(List<LoadedTrack> loadedTracks) {
         rowPaths.clear();
         rowMetadata.clear();
-        DefaultTableModel model = new DefaultTableModel(columns.stream()
-                .map(column1 -> column1.tag().label())
+        DefaultTableModel model = createTableModel();
+
+        for (LoadedTrack loadedTrack : loadedTracks) {
+            rowPaths.add(loadedTrack.path());
+            rowMetadata.add(loadedTrack.metadata());
+            model.addRow(columns.stream()
+                    .map(column -> column.tag().getValue(loadedTrack.metadata()))
+                    .toArray());
+        }
+
+        setModel(model);
+        applyColumnWidths();
+        repaint();
+    }
+
+    private DefaultTableModel createTableModel() {
+        return new DefaultTableModel(columns.stream()
+                .map(column -> column.tag().label())
                 .toArray(String[]::new), 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
+                if (row < 0 || row >= rowMetadata.size()) {
+                    return false;
+                }
+
                 Tag tag = columns.get(column).tag();
                 return tag != Tag.RATING && metadataWriterService.canWrite(tag);
             }
 
             @Override
             public void setValueAt(Object value, int row, int column) {
+                if (updatingModel) {
+                    super.setValueAt(value, row, column);
+                    return;
+                }
+
                 Tag tag = columns.get(column).tag();
                 if (!isCellEditable(row, column)) {
                     super.setValueAt(value, row, column);
@@ -89,22 +192,6 @@ public class TracksTable extends JTable {
                 super.setValueAt(commitFieldEdit(row, tag, value), row, column);
             }
         };
-        for (IndexItem file : files) {
-            SoundFileMetadata metadata;
-            if (file instanceof SoundFileIndexItem soundFileIndexItem) {
-                metadata = readMetadata(soundFileIndexItem);
-            } else {
-                metadata = SoundFileMetadata.empty(file.getPath());
-            }
-
-            rowPaths.add(file.getPath());
-            rowMetadata.add(metadata);
-            model.addRow(columns.stream()
-                    .map(column -> column.tag().getValue(metadata))
-                    .toArray());
-        }
-        setModel(model);
-        applyColumnWidths();
     }
 
     private void registerAddSelectedToPlaylistAction() {
@@ -118,6 +205,19 @@ public class TracksTable extends JTable {
             }
         };
         getActionMap().put(ADD_SELECTED_TO_PLAYLIST_ACTION, action);
+    }
+
+    private void registerEditSelectedMetadataAction() {
+        getInputMap(WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(
+                KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, KeyEvent.CTRL_DOWN_MASK),
+                EDIT_SELECTED_METADATA_ACTION);
+        Action action = new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent event) {
+                editSelectedMetadata();
+            }
+        };
+        getActionMap().put(EDIT_SELECTED_METADATA_ACTION, action);
     }
 
     private void addSelectedToPlaylist() {
@@ -137,6 +237,106 @@ public class TracksTable extends JTable {
         if (!selectedTracks.isEmpty()) {
             selectedTracksConsumer.accept(selectedTracks);
         }
+    }
+
+    private void editSelectedMetadata() {
+        if (isEditing() && getCellEditor() != null) {
+            getCellEditor().stopCellEditing();
+        }
+
+        int[] selectedRows = getSelectedRows();
+        if (selectedRows.length != 1) {
+            return;
+        }
+
+        int modelRow = convertRowIndexToModel(selectedRows[0]);
+        if (modelRow < 0 || modelRow >= rowMetadata.size()) {
+            return;
+        }
+
+        SoundFileMetadata metadata = rowMetadata.get(modelRow);
+        List<Tag> writableTags = new ArrayList<>();
+        for (Tag tag : Tag.values()) {
+            if (metadataWriterService.canWrite(tag)) {
+                writableTags.add(tag);
+            }
+        }
+
+        MetadataEditDialog.showDialog(this, metadata, writableTags)
+                .ifPresent(values -> commitMetadataEdits(modelRow, values));
+    }
+
+    private void commitMetadataEdits(int row, Map<Tag, Object> values) {
+        for (Map.Entry<Tag, Object> entry : values.entrySet()) {
+            if (!commitMetadataEdit(row, entry.getKey(), entry.getValue())) {
+                return;
+            }
+        }
+    }
+
+    private boolean commitMetadataEdit(int row, Tag tag, Object value) {
+        SoundFileMetadata metadata = rowMetadata.get(row);
+        Object currentValue = tag.getValue(metadata);
+        if (!hasChanged(tag, currentValue, value)) {
+            return true;
+        }
+
+        Path path = rowPaths.get(row);
+        try {
+            if (tag == Tag.RATING) {
+                metadataWriterService.writeRating(path, toRating(value));
+            } else {
+                metadataWriterService.writeTag(path, tag, normalizeValue(value));
+            }
+        } catch (IOException | SecurityException | IllegalArgumentException e) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Nie udalo sie zapisac pola: " + tag.label() + ".",
+                    "Blad zapisu",
+                    JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+
+        soundFileMetadataUpdateMapper.setValue(metadata, tag, value);
+        updateVisibleCell(row, tag, tag.getValue(metadata));
+        writeMetadataIndex(metadata, true);
+        return true;
+    }
+
+    private boolean hasChanged(Tag tag, Object currentValue, Object newValue) {
+        if (tag == Tag.RATING) {
+            return toRating(currentValue) != toRating(newValue);
+        }
+
+        String oldValue = normalizeValue(currentValue);
+        String value = normalizeValue(newValue);
+        return !equalsNullable(oldValue, value);
+    }
+
+    private int toRating(Object value) {
+        if (value instanceof Number number) {
+            return Math.clamp(number.intValue(), 0, 10);
+        }
+        if (value == null || value.toString().isBlank()) {
+            return 0;
+        }
+
+        return Math.clamp(Integer.parseInt(value.toString().trim()), 0, 10);
+    }
+
+    private void updateVisibleCell(int row, Tag tag, Object value) {
+        int column = -1;
+        for (int i = 0; i < columns.size(); i++) {
+            if (columns.get(i).tag() == tag) {
+                column = i;
+                break;
+            }
+        }
+        if (column < 0 || column >= getModel().getColumnCount()) {
+            return;
+        }
+
+        setModelValue(row, column, value);
     }
 
     private SoundFileMetadata readMetadata(SoundFileIndexItem soundFileIndexItem) {
@@ -202,7 +402,7 @@ public class TracksTable extends JTable {
 
         previewRow = ratingCell.row();
         previewModelColumn = ratingCell.modelColumn();
-        getModel().setValueAt(ratingCell.rating(), ratingCell.row(), ratingCell.modelColumn());
+        setModelValue(ratingCell.row(), ratingCell.modelColumn(), ratingCell.rating());
     }
 
     private void clearRatingPreview() {
@@ -212,7 +412,7 @@ public class TracksTable extends JTable {
             return;
         }
 
-        getModel().setValueAt(rowMetadata.get(previewRow).rating(), previewRow, previewModelColumn);
+        setModelValue(previewRow, previewModelColumn, rowMetadata.get(previewRow).rating());
         previewRow = -1;
         previewModelColumn = -1;
     }
@@ -265,7 +465,7 @@ public class TracksTable extends JTable {
 
         SoundFileMetadata metadata = rowMetadata.get(ratingCell.row());
         soundFileMetadataUpdateMapper.setValue(metadata, Tag.RATING, ratingCell.rating());
-        getModel().setValueAt(ratingCell.rating(), ratingCell.row(), ratingCell.modelColumn());
+        setModelValue(ratingCell.row(), ratingCell.modelColumn(), ratingCell.rating());
         writeMetadataIndex(metadata, true);
     }
 
@@ -293,6 +493,15 @@ public class TracksTable extends JTable {
         soundFileMetadataUpdateMapper.setValue(metadata, tag, newValue);
         writeMetadataIndex(metadata, true);
         return newValue;
+    }
+
+    private void setModelValue(int row, int column, Object value) {
+        updatingModel = true;
+        try {
+            getModel().setValueAt(value, row, column);
+        } finally {
+            updatingModel = false;
+        }
     }
 
     private String normalizeValue(Object value) {
@@ -325,6 +534,9 @@ public class TracksTable extends JTable {
     }
 
     private record RatingCell(int row, int modelColumn, int rating) {
+    }
+
+    private record LoadedTrack(Path path, SoundFileMetadata metadata) {
     }
 
     private class SaveColumnsListener extends MouseAdapter {
