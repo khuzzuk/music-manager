@@ -18,7 +18,8 @@ implementations, error handling, and change contracts.
 - `src/main/java/pl/khuzzuk/metadata/SoundFileMetadataMapper.java` - maps
   jaudiotagger `AudioFile` objects to `SoundFileMetadata`; mapped file `path` and
   `format` are expected to be present. `format` is a non-null `SoundFileType`
-  because indexing only reads metadata for supported sound-file extensions.
+  because indexing only reads metadata for supported sound-file extensions. Track
+  duration is read from the jaudiotagger `AudioHeader`.
 - `src/main/java/pl/khuzzuk/metadata/MoodConverter.java` - resolves mood values,
   including fallback values stored in comment frames.
 - `src/main/java/pl/khuzzuk/metadata/MetadataIndexWriterService.java` - writes

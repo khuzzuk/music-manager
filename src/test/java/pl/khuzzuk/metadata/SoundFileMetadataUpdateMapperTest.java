@@ -57,6 +57,7 @@ class SoundFileMetadataUpdateMapperTest {
                 null,
                 "Title",
                 8,
+                125,
                 "2026",
                 "Artist",
                 null,

@@ -63,6 +63,8 @@ class SoundFileMetadataMapperTest {
         assertEquals(tempDir.toAbsolutePath().normalize().toString(), metadata.indexedPath());
         assertEquals("Song Title", metadata.title());
         assertEquals(9, metadata.rating());
+        assertEquals(125, metadata.durationSeconds());
+        assertEquals("2:05", metadata.duration());
         assertEquals("2026-05-28", metadata.date());
         assertEquals("Artist Name", metadata.artist());
         assertEquals("Artist One; Artist Two", metadata.artists());
@@ -162,6 +164,7 @@ class SoundFileMetadataMapperTest {
         assertNull(metadata.indexedPath());
         assertNull(metadata.title());
         assertEquals(0, metadata.rating());
+        assertEquals(125, metadata.durationSeconds());
         assertNull(metadata.date());
         assertNull(metadata.album());
         assertNull(metadata.mood());
@@ -238,12 +241,12 @@ class SoundFileMetadataMapperTest {
 
         @Override
         public int getTrackLength() {
-            return 0;
+            return 125;
         }
 
         @Override
         public double getPreciseTrackLength() {
-            return 0;
+            return 124.7;
         }
 
         @Override

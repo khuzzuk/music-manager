@@ -12,6 +12,7 @@ public class SoundFileMetadata {
     private String indexedPath;
     private String title;
     private int rating;
+    private int durationSeconds;
     private String date;
     private String artist;
     private String artists;
@@ -50,6 +51,7 @@ public class SoundFileMetadata {
             String indexedPath,
             String title,
             int rating,
+            int durationSeconds,
             String date,
             String artist,
             String artists,
@@ -86,6 +88,7 @@ public class SoundFileMetadata {
         this.indexedPath = indexedPath;
         this.title = title;
         this.rating = rating;
+        this.durationSeconds = Math.max(0, durationSeconds);
         this.date = date;
         this.artist = artist;
         this.artists = artists;
@@ -131,6 +134,7 @@ public class SoundFileMetadata {
                 path.getFileName().toString(),
                 indexedPath == null ? null : indexedPath.toAbsolutePath().normalize().toString(),
                 null,
+                0,
                 0,
                 null,
                 null,
@@ -210,6 +214,29 @@ public class SoundFileMetadata {
 
     public void setRating(int rating) {
         this.rating = rating;
+    }
+
+    public int getDurationSeconds() {
+        return durationSeconds;
+    }
+
+    public void setDurationSeconds(int durationSeconds) {
+        this.durationSeconds = Math.max(0, durationSeconds);
+    }
+
+    public String getDuration() {
+        if (durationSeconds <= 0) {
+            return null;
+        }
+
+        int hours = durationSeconds / 3600;
+        int minutes = durationSeconds % 3600 / 60;
+        int seconds = durationSeconds % 60;
+        if (hours > 0) {
+            return "%d:%02d:%02d".formatted(hours, minutes, seconds);
+        }
+
+        return "%d:%02d".formatted(minutes, seconds);
     }
 
     public String getDate() {
@@ -474,6 +501,14 @@ public class SoundFileMetadata {
 
     public int rating() {
         return getRating();
+    }
+
+    public int durationSeconds() {
+        return getDurationSeconds();
+    }
+
+    public String duration() {
+        return getDuration();
     }
 
     public String date() {

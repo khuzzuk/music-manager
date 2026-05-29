@@ -27,3 +27,11 @@ When working on indexing-related code, read:
 
 That document describes `IndexService`, `IndexItem`, directory/file/unreadable
 index nodes, traversal behavior, graceful error handling, and known limitations.
+
+When working on playback-related code, read:
+
+- `docs/sound-player-codex.md`
+
+That document describes `SoundPlayer`, `MP3Player`, `FLACPlayer`,
+`SoundPlayerRouter`, playback threading, pause/resume, seek/progress behavior,
+MVC boundaries between `PlayerPane` and `PlaylistPane`, and known limitations.

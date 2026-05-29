@@ -46,6 +46,7 @@ class MetadataIndexWriterServiceTest {
                 null,
                 title,
                 rating,
+                125,
                 null,
                 null,
                 null,

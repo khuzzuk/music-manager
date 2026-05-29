@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 public class SettingsToPropertiesMapper {
     public static final List<TrackColumn> DEFAULT_TRACK_COLUMNS = List.of(
             new TrackColumn(Tag.TITLE, 220),
+            new TrackColumn(Tag.DURATION, 80),
             new TrackColumn(Tag.ALBUM, 180),
             new TrackColumn(Tag.COMPOSER, 160),
             new TrackColumn(Tag.RATING, 70),
@@ -85,7 +86,18 @@ public class SettingsToPropertiesMapper {
                 .map(SettingsToPropertiesMapper::toTrackColumn)
                 .filter(column -> column.tag() != null)
                 .toList();
-        return trackColumns.isEmpty() ? DEFAULT_TRACK_COLUMNS : trackColumns;
+        return trackColumns.isEmpty() ? DEFAULT_TRACK_COLUMNS : withMissingDefaultColumns(trackColumns);
+    }
+
+    private static List<TrackColumn> withMissingDefaultColumns(List<TrackColumn> trackColumns) {
+        List<Tag> configuredTags = trackColumns.stream()
+                .map(TrackColumn::tag)
+                .toList();
+        List<TrackColumn> columns = new java.util.ArrayList<>(trackColumns);
+        DEFAULT_TRACK_COLUMNS.stream()
+                .filter(defaultColumn -> !configuredTags.contains(defaultColumn.tag()))
+                .forEach(columns::add);
+        return List.copyOf(columns);
     }
 
     private static TrackColumn toTrackColumn(String value) {

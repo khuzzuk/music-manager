@@ -19,6 +19,7 @@ class DocumentMapperTest {
                 null,
                 "Title",
                 9,
+                125,
                 "2026",
                 "Artist",
                 null,
@@ -57,6 +58,7 @@ class DocumentMapperTest {
         assertEquals("Album", document.get(Tag.ALBUM.settingsName()));
         assertEquals("Composer", document.get(Tag.COMPOSER.settingsName()));
         assertEquals("Calm", document.get(Tag.MOOD.settingsName()));
+        assertEquals("2:05", document.get(Tag.DURATION.settingsName()));
         assertEquals(9, document.getField(Tag.RATING.settingsName()).numericValue().intValue());
     }
 }

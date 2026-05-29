@@ -2,6 +2,7 @@ package pl.khuzzuk.ui;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JSlider;
 import javax.swing.SwingConstants;
@@ -26,6 +27,8 @@ public class PlayerPane extends JPanel {
     JButton playPauseButton;
     JButton stopButton;
     JButton nextButton;
+    private final JLabel currentTimeLabel;
+    private final JLabel durationTimeLabel;
     private final PlayerController playerController;
     private final Timer progressTimer;
 
@@ -60,6 +63,14 @@ public class PlayerPane extends JPanel {
         progressSlider.setBorder(BorderFactory.createEmptyBorder(20, 5, 20, 5));
         progressSlider.addMouseListener(new ProgressMouseListener());
 
+        currentTimeLabel = createTimeLabel();
+        durationTimeLabel = createTimeLabel();
+        JPanel timeStatus = new JPanel(new FlowLayout(FlowLayout.RIGHT, 3, 5));
+        timeStatus.add(currentTimeLabel);
+        timeStatus.add(new JLabel("/"));
+        timeStatus.add(durationTimeLabel);
+        updateTimeLabels(0, 0);
+
         volumeSlider = new JSlider(SwingConstants.VERTICAL, 0, 100, 60);
         volumeSlider.setFocusable(false);
         volumeSlider.setPaintTicks(false);
@@ -72,6 +83,7 @@ public class PlayerPane extends JPanel {
         playStatus.setLayout(new BorderLayout(5, 5));
         playStatus.add(playControlsWrapper, BorderLayout.WEST);
         playStatus.add(progressSlider, BorderLayout.CENTER);
+        playStatus.add(timeStatus, BorderLayout.EAST);
 
         add(playStatus, BorderLayout.CENTER);
         add(volumeSlider, BorderLayout.WEST);
@@ -100,6 +112,7 @@ public class PlayerPane extends JPanel {
         playerController.stop();
         progressTimer.stop();
         progressSlider.setValue(0);
+        updateTimeLabels(0, 0);
         setPlayPauseButton(false);
     }
 
@@ -119,6 +132,7 @@ public class PlayerPane extends JPanel {
         int positionMillis = playerController.getCurrentPositionMillis();
         progressSlider.setMaximum(Math.max(100, durationMillis));
         progressSlider.setValue(Math.clamp(positionMillis, 0, progressSlider.getMaximum()));
+        updateTimeLabels(positionMillis, durationMillis);
         if (!playing) {
             progressTimer.stop();
             setPlayPauseButton(false);
@@ -139,6 +153,7 @@ public class PlayerPane extends JPanel {
                 durationMillis);
         boolean playing = playerController.seekToMillis(positionMillis);
         progressSlider.setValue(positionMillis);
+        updateTimeLabels(positionMillis, durationMillis);
         if (playing) {
             progressTimer.start();
         } else {
@@ -165,6 +180,31 @@ public class PlayerPane extends JPanel {
         button.setMinimumSize(new Dimension(48, 36));
         button.setMargin(new Insets(0, 0, 0, 0));
         return button;
+    }
+
+    private JLabel createTimeLabel() {
+        JLabel label = new JLabel();
+        label.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        label.setHorizontalAlignment(SwingConstants.RIGHT);
+        label.setPreferredSize(new Dimension(48, 20));
+        return label;
+    }
+
+    private void updateTimeLabels(int positionMillis, int durationMillis) {
+        currentTimeLabel.setText(formatTime(positionMillis));
+        durationTimeLabel.setText(formatTime(durationMillis));
+    }
+
+    private String formatTime(int millis) {
+        int totalSeconds = Math.max(0, millis) / 1000;
+        int hours = totalSeconds / 3600;
+        int minutes = totalSeconds % 3600 / 60;
+        int seconds = totalSeconds % 60;
+        if (hours > 0) {
+            return "%d:%02d:%02d".formatted(hours, minutes, seconds);
+        }
+
+        return "%d:%02d".formatted(minutes, seconds);
     }
 
     private class ProgressMouseListener extends MouseAdapter {

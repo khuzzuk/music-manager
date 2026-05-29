@@ -1,6 +1,7 @@
 package pl.khuzzuk.metadata;
 
 import org.jaudiotagger.audio.AudioFile;
+import org.jaudiotagger.audio.AudioHeader;
 import org.jaudiotagger.tag.FieldKey;
 import pl.khuzzuk.player.SoundFileType;
 
@@ -24,6 +25,7 @@ public class SoundFileMetadataMapper {
                 indexedPath == null ? null : indexedPath.toAbsolutePath().normalize().toString(),
                 getFirst(tag, FieldKey.TITLE),
                 format.readRating(getFirst(tag, FieldKey.RATING)),
+                getDurationSeconds(audioFile.getAudioHeader()),
                 firstNotNull(getFirst(tag, FieldKey.RECORDINGDATE), getFirst(tag, FieldKey.YEAR)),
                 getFirst(tag, FieldKey.ARTIST),
                 getFirst(tag, FieldKey.ARTISTS),
@@ -59,6 +61,19 @@ public class SoundFileMetadataMapper {
     private SoundFileType getFormat(Path path) {
         return SoundFileType.fromPath(path)
                 .orElseThrow(() -> new IllegalArgumentException("Unsupported sound file path: " + path));
+    }
+
+    private int getDurationSeconds(AudioHeader audioHeader) {
+        if (audioHeader == null) {
+            return 0;
+        }
+
+        double preciseTrackLength = audioHeader.getPreciseTrackLength();
+        if (preciseTrackLength > 0) {
+            return Math.toIntExact(Math.min(Integer.MAX_VALUE, Math.round(preciseTrackLength)));
+        }
+
+        return Math.max(0, audioHeader.getTrackLength());
     }
 
     private String getFirst(org.jaudiotagger.tag.Tag tag, FieldKey fieldKey) {

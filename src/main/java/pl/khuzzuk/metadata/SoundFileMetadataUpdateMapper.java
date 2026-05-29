@@ -13,6 +13,7 @@ public class SoundFileMetadataUpdateMapper {
         switch (tag) {
             case FORMAT -> metadata.setFormat(toFormat(value));
             case RATING -> metadata.setRating(toRating(value));
+            case DURATION -> metadata.setDurationSeconds(toDurationSeconds(value));
             case TITLE -> metadata.setTitle(toText(value));
             case DATE -> metadata.setDate(toText(value));
             case ARTIST -> metadata.setArtist(toText(value));
@@ -67,6 +68,17 @@ public class SoundFileMetadataUpdateMapper {
         }
 
         return Integer.parseInt(value.toString().trim());
+    }
+
+    private int toDurationSeconds(Object value) {
+        if (value instanceof Number number) {
+            return Math.max(0, number.intValue());
+        }
+        if (value == null || value.toString().isBlank()) {
+            return 0;
+        }
+
+        return Math.max(0, Integer.parseInt(value.toString().trim()));
     }
 
     private String toText(Object value) {

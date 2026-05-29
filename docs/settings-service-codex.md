@@ -170,7 +170,7 @@ The mapper uses these keys:
 | `lastPlaylist` | `last.playlist` | empty string |
 | `indexedPaths` | `indexed.paths` | empty string |
 | `lastChoosenPath` | `last.choosen.path` | empty path |
-| `trackColumns` | `track.columns` | `title:220;album:180;composer:160;rating:70;mood:120;movement:120;occasion:120` |
+| `trackColumns` | `track.columns` | `title:220;duration:80;album:180;composer:160;rating:70;mood:120;movement:120;occasion:120` |
 
 `lastChoosenPath` intentionally uses the current field spelling from code.
 `indexedPaths` is stored as one property joined with `File.pathSeparator`, which is
@@ -187,7 +187,7 @@ Example:
 #Settings
 #Tue May 26 20:58:28 CEST 2026
 indexed.paths=C\:\\Music;D\:\\Archive\\Music
-track.columns=title:220;album:180;composer:160;rating:70;mood:120;movement:120;occasion:120
+track.columns=title:220;duration:80;album:180;composer:160;rating:70;mood:120;movement:120;occasion:120
 last.playlist=
 last.tree.position=
 last.choosen.path=C\:\\Music
@@ -299,7 +299,7 @@ last.playlist=lastPlaylist default ""
 indexed.paths=indexedPaths joined with File.pathSeparator default ""
 last.choosen.path=lastChoosenPath default empty path
 track.columns=trackColumns formatted as name:width entries joined with ; default
-title:220;album:180;composer:160;rating:70;mood:120;movement:120;occasion:120
+title:220;duration:80;album:180;composer:160;rating:70;mood:120;movement:120;occasion:120
 
 Integration:
 MusicManager creates SettingsService and stores it in Context.
