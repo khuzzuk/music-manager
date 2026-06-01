@@ -4,6 +4,7 @@ import pl.khuzzuk.metadata.MetadataReaderService;
 import pl.khuzzuk.metadata.MetadataIndexReaderService;
 import pl.khuzzuk.metadata.MetadataIndexWriterService;
 import pl.khuzzuk.metadata.SoundFileMetadata;
+import pl.khuzzuk.logging.ErrorReporter;
 import pl.khuzzuk.player.SoundFileType;
 
 import java.io.IOException;
@@ -273,7 +274,7 @@ public class IndexService {
         try {
             metadataItems.add(metadataReaderService.readMetadata(path));
         } catch (IOException | SecurityException e) {
-            // Metadata indexing is best-effort; filesystem indexing should continue.
+            ErrorReporter.log("Cannot read metadata while indexing: " + path, e);
         }
     }
 
@@ -281,7 +282,7 @@ public class IndexService {
         try {
             metadataIndexWriterService.writeMetadata(metadataItems);
         } catch (IOException | SecurityException e) {
-            // Metadata indexing is best-effort; filesystem indexing should continue.
+            ErrorReporter.log("Cannot write metadata index.", e);
         }
     }
 
@@ -289,7 +290,7 @@ public class IndexService {
         try {
             metadataIndexWriterService.deleteMetadata(metadataPaths);
         } catch (IOException | SecurityException e) {
-            // Metadata cleanup is best-effort; filesystem indexing should continue.
+            ErrorReporter.log("Cannot delete metadata from index.", e);
         }
     }
 
@@ -304,6 +305,7 @@ public class IndexService {
                     .filter(path -> !currentCachedPaths.contains(path.toAbsolutePath().normalize()))
                     .toList();
         } catch (IOException | SecurityException e) {
+            ErrorReporter.log("Cannot read metadata index while detecting changed files.", e);
             return metadataPaths;
         }
     }

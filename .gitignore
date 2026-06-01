@@ -5,6 +5,7 @@ build/
 !**/src/test/**/build/
 .kotlin
 index.dat
+music-manager.log
 metadata-index/
 
 ### IntelliJ IDEA ###

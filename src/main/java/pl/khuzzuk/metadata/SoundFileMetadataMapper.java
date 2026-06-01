@@ -81,7 +81,11 @@ public class SoundFileMetadataMapper {
             return null;
         }
 
-        return emptyToNull(tag.getFirst(fieldKey));
+        try {
+            return emptyToNull(tag.getFirst(fieldKey));
+        } catch (UnsupportedOperationException e) {
+            return null;
+        }
     }
 
     private String getMood(org.jaudiotagger.tag.Tag tag) {
@@ -89,7 +93,11 @@ public class SoundFileMetadataMapper {
             return null;
         }
 
-        return emptyToNull(moodConverter.getMood(tag));
+        try {
+            return emptyToNull(moodConverter.getMood(tag));
+        } catch (UnsupportedOperationException e) {
+            return null;
+        }
     }
 
     private String firstNotNull(String first, String second) {

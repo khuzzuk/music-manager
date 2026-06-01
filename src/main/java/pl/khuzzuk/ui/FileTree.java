@@ -4,6 +4,7 @@ import pl.khuzzuk.Context;
 import pl.khuzzuk.index.IndexItem;
 import pl.khuzzuk.index.IndexService;
 import pl.khuzzuk.index.RootIndexItem;
+import pl.khuzzuk.logging.ErrorReporter;
 import pl.khuzzuk.ui.icons.TreeToggleIcon;
 
 import javax.swing.AbstractAction;
@@ -136,9 +137,12 @@ public class FileTree extends JTree {
                 try {
                     get();
                 } catch (Exception e) {
+                    ErrorReporter.log("Cannot reindex directory.", e);
                     JOptionPane.showMessageDialog(
                             FileTree.this,
-                            "Nie udalo sie przeindeksowac katalogu.",
+                            "Nie udalo sie przeindeksowac katalogu.\n"
+                                    + ErrorReporter.userMessage(e)
+                                    + "\n\nStack trace zapisano w " + ErrorReporter.logFile(),
                             "Blad indeksowania",
                             JOptionPane.ERROR_MESSAGE);
                 }

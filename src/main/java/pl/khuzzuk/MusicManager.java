@@ -13,8 +13,10 @@ import pl.khuzzuk.metadata.MoodConverter;
 import pl.khuzzuk.metadata.SoundFileMetadataMapper;
 import pl.khuzzuk.player.FLACPlayer;
 import pl.khuzzuk.player.MP3Player;
+import pl.khuzzuk.player.OGGPlayer;
 import pl.khuzzuk.player.SoundPlayer;
 import pl.khuzzuk.player.SoundPlayerRouter;
+import pl.khuzzuk.player.WAVPlayer;
 import pl.khuzzuk.settings.SettingsService;
 import pl.khuzzuk.settings.SettingsToPropertiesMapper;
 import pl.khuzzuk.ui.MainWindow;
@@ -59,7 +61,11 @@ public class MusicManager {
                     metadataIndexWriterService);
             IndexReaderService indexReaderService = new IndexReaderService(INDEX_PATH);
             indexReaderService.read();
-            SoundPlayer soundPlayer = new SoundPlayerRouter(new MP3Player(), new FLACPlayer());
+            SoundPlayer soundPlayer = new SoundPlayerRouter(
+                    new MP3Player(),
+                    new FLACPlayer(),
+                    new WAVPlayer(),
+                    new OGGPlayer());
             context = new Context(
                     settingsService,
                     metadataReaderService,

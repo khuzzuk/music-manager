@@ -11,6 +11,10 @@ integration, and conventions established while adding MP3 and FLAC playback.
   JLayer.
 - `src/main/java/pl/khuzzuk/player/FLACPlayer.java` - FLAC implementation using
   direct `org.jflac.FLACDecoder` decoding from `jflac-codec`.
+- `src/main/java/pl/khuzzuk/player/WAVPlayer.java` - WAV implementation using
+  Java Sound `AudioInputStream` and `SourceDataLine`.
+- `src/main/java/pl/khuzzuk/player/OGGPlayer.java` - OGG/Vorbis implementation
+  using Java Sound plus VorbisSPI for decoding.
 - `src/main/java/pl/khuzzuk/player/SoundPlayerRouter.java` - selects the concrete
   player by `SoundFileType`.
 - `src/main/java/pl/khuzzuk/player/SoundFile.java` - path and display title for a
@@ -28,7 +32,8 @@ integration, and conventions established while adding MP3 and FLAC playback.
 - `src/main/java/pl/khuzzuk/MusicManager.java` - creates the global
   `SoundPlayer` in `initComponents()` and stores it in `Context`.
 - `build.gradle` - playback dependencies:
-  `javazoom:jlayer:1.0.1` and `org.jflac:jflac-codec:1.5.2`.
+  `javazoom:jlayer:1.0.1`, `org.jflac:jflac-codec:1.5.2`, and
+  `dev.mccue:vorbisspi:2024.04.19`.
 
 ## Architecture
 
@@ -39,7 +44,11 @@ integration, and conventions established while adding MP3 and FLAC playback.
 `MusicManager.initComponents()` creates:
 
 ```java
-SoundPlayer soundPlayer = new SoundPlayerRouter(new MP3Player(), new FLACPlayer());
+SoundPlayer soundPlayer = new SoundPlayerRouter(
+        new MP3Player(),
+        new FLACPlayer(),
+        new WAVPlayer(),
+        new OGGPlayer());
 ```
 
 `SoundPlayerRouter` chooses the concrete player from `SoundFileType.fromPath(...)`.
@@ -163,6 +172,37 @@ This is simple and dependency-light, but not a true FLAC seek-table seek. If
 future performance becomes a problem for long files, keep the public
 `SoundPlayer` contract and replace only FLAC internals.
 
+## WAVPlayer Conventions
+
+`WAVPlayer` uses Java Sound to read WAV files:
+
+```java
+AudioSystem.getAudioInputStream(...)
+```
+
+Playback writes decoded PCM directly to `SourceDataLine`. Seeking is implemented
+by opening a fresh stream and skipping bytes derived from the WAV audio format's
+frame rate and frame size. This keeps the same millisecond-based public contract
+as MP3 and FLAC playback.
+
+## OGGPlayer Conventions
+
+`OGGPlayer` uses Java Sound in the same shape as `WAVPlayer`, but depends on
+VorbisSPI to provide OGG/Vorbis decoding through `AudioSystem`.
+
+Open the source stream with:
+
+```java
+AudioSystem.getAudioInputStream(...)
+```
+
+Then convert it to `PCM_SIGNED` before writing to `SourceDataLine`. Seeking is
+implemented by reopening the stream and skipping decoded PCM bytes derived from
+frame rate and frame size, matching the millisecond-based `SoundPlayer`
+contract used by the other players. Prefer VorbisSPI's `duration` audio file
+property for track length, because decoded OGG streams may report an unspecified
+frame length.
+
 ## UI Integration
 
 `PlayerPane` is a view. It should not read from `PlaylistPane` or call
@@ -209,6 +249,8 @@ When changing playback code:
   imprecise.
 - FLAC duration depends on `StreamInfo.totalSamples` and `StreamInfo.sampleRate`.
 - FLAC seek skips decoded PCM bytes and may be slow for large target positions.
+- OGG playback depends on the Java Sound service provider from VorbisSPI being
+  available on the runtime classpath.
 - Current players do not expose completion callbacks. `PlayerController` detects
   completion by comparing current position with duration during timer refresh.
 - Volume slider is present in UI but is not wired to player output.

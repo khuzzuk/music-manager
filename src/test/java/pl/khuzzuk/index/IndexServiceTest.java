@@ -67,6 +67,8 @@ class IndexServiceTest {
         Path music = Files.createDirectory(tempDir.resolve("music"));
         Files.createFile(music.resolve("song.mp3"));
         Files.createFile(music.resolve("album.flac"));
+        Files.createFile(music.resolve("live.ogg"));
+        Files.createFile(music.resolve("bonus.oga"));
         Files.createFile(music.resolve("notes.txt"));
         Files.createFile(music.resolve("cover.jpg"));
         Files.createFile(music.resolve("README"));
@@ -75,7 +77,7 @@ class IndexServiceTest {
         RootIndexItem root = new RootIndexItem();
         indexService(indexPath).index(root, List.of(music));
 
-        assertEquals(List.of("album.flac", "song.mp3"), root.getChildren().getFirst().getChildren().stream()
+        assertEquals(List.of("album.flac", "bonus.oga", "live.ogg", "song.mp3"), root.getChildren().getFirst().getChildren().stream()
                 .map(IndexItem::getName)
                 .toList());
     }
@@ -85,12 +87,13 @@ class IndexServiceTest {
         Path music = Files.createDirectory(tempDir.resolve("music"));
         Files.createFile(music.resolve("song.MP3"));
         Files.createFile(music.resolve("album.FLAC"));
+        Files.createFile(music.resolve("live.OGG"));
         Path indexPath = tempDir.resolve("index.dat");
 
         RootIndexItem root = new RootIndexItem();
         indexService(indexPath).index(root, List.of(music));
 
-        assertEquals(List.of("album.FLAC", "song.MP3"), root.getChildren().getFirst().getChildren().stream()
+        assertEquals(List.of("album.FLAC", "live.OGG", "song.MP3"), root.getChildren().getFirst().getChildren().stream()
                 .map(IndexItem::getName)
                 .toList());
     }

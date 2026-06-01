@@ -3,6 +3,7 @@ package pl.khuzzuk.ui;
 import pl.khuzzuk.Context;
 import pl.khuzzuk.index.IndexItem;
 import pl.khuzzuk.index.SoundFileIndexItem;
+import pl.khuzzuk.logging.ErrorReporter;
 import pl.khuzzuk.metadata.MetadataIndexReaderService;
 import pl.khuzzuk.metadata.MetadataIndexWriterService;
 import pl.khuzzuk.metadata.MetadataReaderService;
@@ -106,6 +107,7 @@ class TracksTableController {
             writeMetadataIndex(metadata);
             return metadata;
         } catch (IOException | SecurityException e) {
+            ErrorReporter.log("Cannot read metadata while loading table: " + soundFileIndexItem.getPath(), e);
             return SoundFileMetadata.empty(soundFileIndexItem.getPath());
         }
     }
@@ -118,6 +120,7 @@ class TracksTableController {
         try {
             return metadataIndexReaderService.readMetadata(soundFilePaths);
         } catch (IOException | SecurityException e) {
+            ErrorReporter.log("Cannot read metadata index while loading table.", e);
             return Map.of();
         }
     }
@@ -126,7 +129,7 @@ class TracksTableController {
         try {
             metadataIndexWriterService.writeMetadata(metadata);
         } catch (IOException | SecurityException e) {
-            // Metadata cache refresh is best-effort while loading the table.
+            ErrorReporter.log("Cannot refresh metadata index while loading table.", e);
         }
     }
 

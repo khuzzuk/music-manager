@@ -4,6 +4,7 @@ import pl.khuzzuk.Context;
 import pl.khuzzuk.index.IndexReaderService;
 import pl.khuzzuk.index.IndexService;
 import pl.khuzzuk.index.RootIndexItem;
+import pl.khuzzuk.logging.ErrorReporter;
 import pl.khuzzuk.settings.Settings;
 import pl.khuzzuk.settings.SettingsService;
 
@@ -99,9 +100,12 @@ public class IndexDirectoriesDialog extends JDialog {
             try {
                 settingsService.saveSettings(newSettings);
             } catch (IOException e) {
+                ErrorReporter.log("Cannot save settings.", e);
                 JOptionPane.showMessageDialog(
                         this,
-                        "Nie udalo sie zapisac ustawien.",
+                        "Nie udalo sie zapisac ustawien.\n"
+                                + ErrorReporter.userMessage(e)
+                                + "\n\nStack trace zapisano w " + ErrorReporter.logFile(),
                         "Blad zapisu",
                         JOptionPane.ERROR_MESSAGE);
                 return;
@@ -128,9 +132,12 @@ public class IndexDirectoriesDialog extends JDialog {
                     get();
                     refresh();
                 } catch (Exception e) {
+                    ErrorReporter.log("Cannot write index.", e);
                     JOptionPane.showMessageDialog(
                             IndexDirectoriesDialog.this,
-                            "Nie udalo sie zapisac indeksu.",
+                            "Nie udalo sie zapisac indeksu.\n"
+                                    + ErrorReporter.userMessage(e)
+                                    + "\n\nStack trace zapisano w " + ErrorReporter.logFile(),
                             "Blad indeksowania",
                             JOptionPane.ERROR_MESSAGE);
                 }

@@ -10,7 +10,9 @@ import java.util.stream.Stream;
 
 public enum SoundFileType {
     MP3(Set.of("mp3"), true),
-    FLAC(Set.of("flac"), false);
+    FLAC(Set.of("flac"), false),
+    WAV(Set.of("wav", "wave"), false),
+    OGG(Set.of("ogg", "oga"), false);
 
     private final Set<String> extensions;
     private final boolean byteRating;

@@ -108,6 +108,27 @@ class SoundFileMetadataMapperTest {
     }
 
     @Test
+    void mapsUnsupportedTagFieldsAsMissingValues() throws TagException {
+        ID3v24Tag tag = new ID3v24Tag() {
+            @Override
+            public String getFirst(FieldKey genericKey) {
+                if (genericKey == FieldKey.RECORDINGDATE) {
+                    throw new UnsupportedOperationException("Not available for this field RECORDINGDATE");
+                }
+
+                return super.getFirst(genericKey);
+            }
+        };
+        tag.setField(FieldKey.YEAR, "2026");
+
+        SoundFileMetadata metadata = mapper().toMetadata(audioFile(tempDir.resolve("song.wav"), "WAV", tag), null);
+
+        assertEquals(SoundFileType.WAV, metadata.format());
+        assertEquals(125, metadata.durationSeconds());
+        assertEquals("2026", metadata.date());
+    }
+
+    @Test
     void usesZeroRatingWhenRatingFieldIsNotNumeric() throws TagException {
         ID3v24Tag tag = new ID3v24Tag();
         tag.setField(FieldKey.RATING, "invalid");

@@ -5,11 +5,15 @@ import java.nio.file.Path;
 public class SoundPlayerRouter implements SoundPlayer {
     private final SoundPlayer mp3Player;
     private final SoundPlayer flacPlayer;
+    private final SoundPlayer wavPlayer;
+    private final SoundPlayer oggPlayer;
     private SoundPlayer currentPlayer;
 
-    public SoundPlayerRouter(SoundPlayer mp3Player, SoundPlayer flacPlayer) {
+    public SoundPlayerRouter(SoundPlayer mp3Player, SoundPlayer flacPlayer, SoundPlayer wavPlayer, SoundPlayer oggPlayer) {
         this.mp3Player = mp3Player;
         this.flacPlayer = flacPlayer;
+        this.wavPlayer = wavPlayer;
+        this.oggPlayer = oggPlayer;
     }
 
     @Override
@@ -61,10 +65,16 @@ public class SoundPlayerRouter implements SoundPlayer {
     private SoundPlayer playerFor(SoundFile soundFile) {
         SoundFileType soundFileType = SoundFileType.fromPath(Path.of(soundFile.path()))
                 .orElseThrow(() -> new IllegalArgumentException("Unsupported sound file: " + soundFile.path()));
-        return switch (soundFileType) {
+        SoundPlayer player = switch (soundFileType) {
             case MP3 -> mp3Player;
             case FLAC -> flacPlayer;
+            case WAV -> wavPlayer;
+            case OGG -> oggPlayer;
         };
+        if (player == null) {
+            throw new IllegalArgumentException("Unsupported sound file: " + soundFile.path());
+        }
+        return player;
     }
 
     private void stopCurrentIfDifferent(SoundPlayer player) {
