@@ -12,7 +12,10 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
@@ -23,36 +26,40 @@ import java.awt.Window;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 public class MetadataEditDialog extends JDialog {
+    private static final Color CHANGED_FIELD_COLOR = new Color(224, 240, 255);
     private final Map<Tag, JComponent> editors = new EnumMap<>(Tag.class);
+    private final Map<Tag, Object> initialValues = new EnumMap<>(Tag.class);
+    private final Map<Tag, Color> editorBackgrounds = new EnumMap<>(Tag.class);
     private Optional<Map<Tag, Object>> result = Optional.empty();
 
     public static Optional<Map<Tag, Object>> showDialog(
             Component parent,
-            SoundFileMetadata metadata,
+            List<SoundFileMetadata> metadataItems,
             List<Tag> writableTags) {
         Window owner = SwingUtilities.getWindowAncestor(parent);
-        MetadataEditDialog dialog = new MetadataEditDialog(owner, metadata, writableTags);
-        dialog.setLocationRelativeTo(parent);
+        MetadataEditDialog dialog = new MetadataEditDialog(owner, metadataItems, writableTags);
+        dialog.setLocationNearTopLeft(owner);
         dialog.setVisible(true);
         return dialog.result;
     }
 
-    private MetadataEditDialog(Window owner, SoundFileMetadata metadata, List<Tag> writableTags) {
+    private MetadataEditDialog(Window owner, List<SoundFileMetadata> metadataItems, List<Tag> writableTags) {
         super(owner, "Edycja metadanych", ModalityType.APPLICATION_MODAL);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setLayout(new BorderLayout(0, 8));
 
-        add(createForm(metadata, writableTags), BorderLayout.CENTER);
+        add(createForm(metadataItems, writableTags), BorderLayout.CENTER);
         add(createButtons(), BorderLayout.SOUTH);
 
         setMinimumSize(new Dimension(520, 420));
         pack();
     }
 
-    private JComponent createForm(SoundFileMetadata metadata, List<Tag> writableTags) {
+    private JComponent createForm(List<SoundFileMetadata> metadataItems, List<Tag> writableTags) {
         JPanel form = new JPanel(new GridBagLayout());
         form.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
@@ -62,13 +69,18 @@ public class MetadataEditDialog extends JDialog {
         constraints.anchor = GridBagConstraints.WEST;
 
         for (Tag tag : writableTags) {
+            FieldState fieldState = getFieldState(metadataItems, tag);
             constraints.gridx = 0;
             constraints.weightx = 0;
             constraints.fill = GridBagConstraints.NONE;
             form.add(new JLabel(tag.label()), constraints);
 
-            JComponent editor = createEditor(tag, tag.getValue(metadata));
+            JComponent editor = createEditor(tag, fieldState.initialValue());
+            editor.setEnabled(fieldState.editable());
             editors.put(tag, editor);
+            initialValues.put(tag, fieldState.initialValue());
+            editorBackgrounds.put(tag, editor.getBackground());
+            installChangeListener(tag, editor);
 
             constraints.gridx = 1;
             constraints.weightx = 1;
@@ -87,8 +99,39 @@ public class MetadataEditDialog extends JDialog {
             return new RatingEditor(value instanceof Number number ? number.intValue() : 0);
         }
 
-        JTextField textField = new JTextField(value == null ? "" : value.toString(), 34);
-        return textField;
+        return new JTextField(value == null ? "" : value.toString(), 34);
+    }
+
+    private void installChangeListener(Tag tag, JComponent editor) {
+        if (editor instanceof RatingEditor ratingEditor) {
+            ratingEditor.addChangeListener(ignored -> updateChangeLabel(tag));
+        } else if (editor instanceof JTextField textField) {
+            textField.getDocument().addDocumentListener(new DocumentListener() {
+                @Override
+                public void insertUpdate(DocumentEvent event) {
+                    updateChangeLabel(tag);
+                }
+
+                @Override
+                public void removeUpdate(DocumentEvent event) {
+                    updateChangeLabel(tag);
+                }
+
+                @Override
+                public void changedUpdate(DocumentEvent event) {
+                    updateChangeLabel(tag);
+                }
+            });
+        }
+    }
+
+    private void updateChangeLabel(Tag tag) {
+        JComponent editor = editors.get(tag);
+        if (editor == null || !editor.isEnabled()) {
+            return;
+        }
+
+        editor.setBackground(isChanged(tag) ? CHANGED_FIELD_COLOR : editorBackgrounds.get(tag));
     }
 
     private JComponent createButtons() {
@@ -96,8 +139,8 @@ public class MetadataEditDialog extends JDialog {
         JButton cancelButton = new JButton("Anuluj");
         JButton saveButton = new JButton("Zapisz");
 
-        cancelButton.addActionListener(event -> dispose());
-        saveButton.addActionListener(event -> {
+        cancelButton.addActionListener(ignored -> dispose());
+        saveButton.addActionListener(ignored -> {
             result = Optional.of(readValues());
             dispose();
         });
@@ -111,6 +154,10 @@ public class MetadataEditDialog extends JDialog {
     private Map<Tag, Object> readValues() {
         Map<Tag, Object> values = new EnumMap<>(Tag.class);
         for (Map.Entry<Tag, JComponent> entry : editors.entrySet()) {
+            if (!entry.getValue().isEnabled() || !isChanged(entry.getKey())) {
+                continue;
+            }
+
             JComponent editor = entry.getValue();
             if (editor instanceof RatingEditor ratingEditor) {
                 values.put(entry.getKey(), ratingEditor.getRating());
@@ -121,5 +168,72 @@ public class MetadataEditDialog extends JDialog {
         }
 
         return values;
+    }
+
+    private boolean isChanged(Tag tag) {
+        return !Objects.equals(normalizeValue(tag, initialValues.get(tag)), normalizeValue(tag, readValue(tag)));
+    }
+
+    private Object readValue(Tag tag) {
+        JComponent editor = editors.get(tag);
+        if (editor instanceof RatingEditor ratingEditor) {
+            return ratingEditor.getRating();
+        }
+        if (editor instanceof JTextField textField) {
+            String text = textField.getText().trim();
+            return text.isEmpty() ? null : text;
+        }
+
+        return null;
+    }
+
+    private FieldState getFieldState(List<SoundFileMetadata> metadataItems, Tag tag) {
+        Object commonValue = null;
+        boolean firstValue = true;
+        for (SoundFileMetadata metadata : metadataItems) {
+            Object value = normalizeValue(tag, tag.getValue(metadata));
+            if (firstValue) {
+                commonValue = value;
+                firstValue = false;
+            } else if (!Objects.equals(commonValue, value)) {
+                return new FieldState(null, false);
+            }
+        }
+
+        return new FieldState(commonValue == null ? emptyValue(tag) : commonValue, true);
+    }
+
+    private Object normalizeValue(Tag tag, Object value) {
+        if (tag == Tag.RATING) {
+            if (value instanceof Number number) {
+                return number.intValue();
+            }
+            if (value == null || value.toString().isBlank()) {
+                return 0;
+            }
+            return Integer.parseInt(value.toString().trim());
+        }
+
+        if (value == null) {
+            return null;
+        }
+        String text = value.toString().trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    private Object emptyValue(Tag tag) {
+        return tag == Tag.RATING ? 0 : null;
+    }
+
+    private void setLocationNearTopLeft(Window owner) {
+        if (owner == null) {
+            setLocation(80, 80);
+            return;
+        }
+
+        setLocation(owner.getX() + 48, owner.getY() + 64);
+    }
+
+    private record FieldState(Object initialValue, boolean editable) {
     }
 }

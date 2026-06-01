@@ -219,16 +219,24 @@ public class TracksTable extends JTable {
         }
 
         int[] selectedRows = getSelectedRows();
-        if (selectedRows.length != 1) {
+        if (selectedRows.length == 0) {
             return;
         }
 
-        int modelRow = convertRowIndexToModel(selectedRows[0]);
-        if (modelRow < 0 || modelRow >= rowMetadata.size()) {
+        List<Integer> modelRows = new ArrayList<>();
+        List<SoundFileMetadata> selectedMetadata = new ArrayList<>();
+        for (int selectedRow : selectedRows) {
+            int modelRow = convertRowIndexToModel(selectedRow);
+            if (modelRow >= 0 && modelRow < rowMetadata.size()) {
+                modelRows.add(modelRow);
+                selectedMetadata.add(rowMetadata.get(modelRow));
+            }
+        }
+
+        if (modelRows.isEmpty()) {
             return;
         }
 
-        SoundFileMetadata metadata = rowMetadata.get(modelRow);
         List<Tag> writableTags = new ArrayList<>();
         for (Tag tag : Tag.values()) {
             if (metadataWriterService.canWrite(tag)) {
@@ -236,8 +244,14 @@ public class TracksTable extends JTable {
             }
         }
 
-        MetadataEditDialog.showDialog(this, metadata, writableTags)
-                .ifPresent(values -> commitMetadataEdits(modelRow, values));
+        MetadataEditDialog.showDialog(this, selectedMetadata, writableTags)
+                .ifPresent(values -> commitMetadataEdits(modelRows, values));
+    }
+
+    private void commitMetadataEdits(List<Integer> rows, Map<Tag, Object> values) {
+        for (int row : rows) {
+            commitMetadataEdits(row, values);
+        }
     }
 
     private void commitMetadataEdits(int row, Map<Tag, Object> values) {

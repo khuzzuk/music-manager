@@ -3,6 +3,8 @@ package pl.khuzzuk.ui;
 import pl.khuzzuk.ui.icons.RatingIcon;
 
 import javax.swing.JComponent;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Graphics;
@@ -16,6 +18,7 @@ public class RatingEditor extends JComponent {
     private static final int PADDING = 4;
     private int rating;
     private int previewRating = -1;
+    private final javax.swing.event.EventListenerList listenerList = new javax.swing.event.EventListenerList();
 
     public RatingEditor(int rating) {
         this.rating = Math.clamp(rating, 0, MAX_RATING);
@@ -33,6 +36,10 @@ public class RatingEditor extends JComponent {
         return rating;
     }
 
+    public void addChangeListener(ChangeListener listener) {
+        listenerList.add(ChangeListener.class, listener);
+    }
+
     @Override
     protected void paintComponent(Graphics graphics) {
         super.paintComponent(graphics);
@@ -41,8 +48,21 @@ public class RatingEditor extends JComponent {
     }
 
     private void setRating(int rating) {
-        this.rating = Math.clamp(rating, 0, MAX_RATING);
+        int nextRating = Math.clamp(rating, 0, MAX_RATING);
+        if (this.rating == nextRating) {
+            return;
+        }
+
+        this.rating = nextRating;
         repaint();
+        fireChangeEvent();
+    }
+
+    private void fireChangeEvent() {
+        ChangeEvent event = new ChangeEvent(this);
+        for (ChangeListener listener : listenerList.getListeners(ChangeListener.class)) {
+            listener.stateChanged(event);
+        }
     }
 
     private int ratingFromMouseX(int x) {
