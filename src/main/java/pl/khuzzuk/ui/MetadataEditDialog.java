@@ -1,5 +1,6 @@
 package pl.khuzzuk.ui;
 
+import pl.khuzzuk.metadata.MetadataIndexReaderService;
 import pl.khuzzuk.metadata.SoundFileMetadata;
 import pl.khuzzuk.metadata.Tag;
 
@@ -31,24 +32,43 @@ import java.util.Optional;
 
 public class MetadataEditDialog extends JDialog {
     private static final Color CHANGED_FIELD_COLOR = new Color(224, 240, 255);
+    private static final List<Tag> SUGGESTED_TAGS = List.of(
+            Tag.ARTIST,
+            Tag.COMPOSER,
+            Tag.CONDUCTOR,
+            Tag.GENRE,
+            Tag.MOOD,
+            Tag.TEMPO,
+            Tag.OCCASION);
+    private final MetadataIndexReaderService metadataIndexReaderService;
     private final Map<Tag, JComponent> editors = new EnumMap<>(Tag.class);
     private final Map<Tag, Object> initialValues = new EnumMap<>(Tag.class);
     private final Map<Tag, Color> editorBackgrounds = new EnumMap<>(Tag.class);
-    private Optional<Map<Tag, Object>> result = Optional.empty();
+    private Map<Tag, Object> result;
 
     public static Optional<Map<Tag, Object>> showDialog(
             Component parent,
             List<SoundFileMetadata> metadataItems,
-            List<Tag> writableTags) {
+            List<Tag> writableTags,
+            MetadataIndexReaderService metadataIndexReaderService) {
         Window owner = SwingUtilities.getWindowAncestor(parent);
-        MetadataEditDialog dialog = new MetadataEditDialog(owner, metadataItems, writableTags);
+        MetadataEditDialog dialog = new MetadataEditDialog(
+                owner,
+                metadataItems,
+                writableTags,
+                metadataIndexReaderService);
         dialog.setLocationNearTopLeft(owner);
         dialog.setVisible(true);
-        return dialog.result;
+        return Optional.ofNullable(dialog.result);
     }
 
-    private MetadataEditDialog(Window owner, List<SoundFileMetadata> metadataItems, List<Tag> writableTags) {
+    private MetadataEditDialog(
+            Window owner,
+            List<SoundFileMetadata> metadataItems,
+            List<Tag> writableTags,
+            MetadataIndexReaderService metadataIndexReaderService) {
         super(owner, "Edycja metadanych", ModalityType.APPLICATION_MODAL);
+        this.metadataIndexReaderService = metadataIndexReaderService;
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setLayout(new BorderLayout(0, 8));
 
@@ -99,7 +119,12 @@ public class MetadataEditDialog extends JDialog {
             return new RatingEditor(value instanceof Number number ? number.intValue() : 0);
         }
 
-        return new JTextField(value == null ? "" : value.toString(), 34);
+        String text = value == null ? "" : value.toString();
+        if (SUGGESTED_TAGS.contains(tag)) {
+            return new MetadataSuggestionTextField(text, 34, tag, metadataIndexReaderService);
+        }
+
+        return new JTextField(text, 34);
     }
 
     private void installChangeListener(Tag tag, JComponent editor) {
@@ -141,7 +166,7 @@ public class MetadataEditDialog extends JDialog {
 
         cancelButton.addActionListener(ignored -> dispose());
         saveButton.addActionListener(ignored -> {
-            result = Optional.of(readValues());
+            result = readValues();
             dispose();
         });
         getRootPane().setDefaultButton(saveButton);

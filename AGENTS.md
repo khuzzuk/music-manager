@@ -9,6 +9,10 @@ Object-to-object mapping logic should live in a dedicated Mapper class. For
 example, mapping `SoundFileMetadata` to a Lucene `Document` should be handled by a
 mapper such as `DocumentMapper`, not inline in a service.
 
+Do not use `Optional` as an object field type or as a method/constructor
+parameter type. `Optional` is acceptable as a return type when it clearly models
+an absent result.
+
 For documentation work, use:
 
 - `docs/codex-documentation-prompt.md`

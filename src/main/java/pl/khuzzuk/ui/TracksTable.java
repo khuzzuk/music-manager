@@ -2,6 +2,7 @@ package pl.khuzzuk.ui;
 
 import pl.khuzzuk.Context;
 import pl.khuzzuk.index.IndexItem;
+import pl.khuzzuk.metadata.MetadataIndexReaderService;
 import pl.khuzzuk.metadata.MetadataIndexWriterService;
 import pl.khuzzuk.metadata.MetadataWriterService;
 import pl.khuzzuk.metadata.SoundFileMetadata;
@@ -39,6 +40,7 @@ public class TracksTable extends JTable {
     private static final String EDIT_SELECTED_METADATA_ACTION = "editSelectedMetadata";
     private final SettingsService settingsService;
     private final MetadataWriterService metadataWriterService;
+    private final MetadataIndexReaderService metadataIndexReaderService;
     private final MetadataIndexWriterService metadataIndexWriterService;
     private final TracksTableController controller;
     private final Consumer<List<SoundFileMetadata>> selectedTracksConsumer;
@@ -53,6 +55,7 @@ public class TracksTable extends JTable {
     public TracksTable(Context context, Consumer<List<SoundFileMetadata>> selectedTracksConsumer) {
         this.settingsService = context.settingsService();
         this.metadataWriterService = context.metadataWriterService();
+        this.metadataIndexReaderService = context.metadataIndexReaderService();
         this.metadataIndexWriterService = context.metadataIndexWriterService();
         this.controller = new TracksTableController(context);
         this.selectedTracksConsumer = selectedTracksConsumer;
@@ -244,7 +247,7 @@ public class TracksTable extends JTable {
             }
         }
 
-        MetadataEditDialog.showDialog(this, selectedMetadata, writableTags)
+        MetadataEditDialog.showDialog(this, selectedMetadata, writableTags, metadataIndexReaderService)
                 .ifPresent(values -> commitMetadataEdits(modelRows, values));
     }
 
