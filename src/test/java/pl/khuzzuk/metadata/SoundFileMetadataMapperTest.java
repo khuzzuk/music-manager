@@ -58,7 +58,7 @@ class SoundFileMetadataMapperTest {
         SoundFileMetadata metadata = mapper().toMetadata(audioFile(path, "MP3", tag), tempDir);
 
         assertEquals(SoundFileType.MP3, metadata.format());
-        assertEquals(path.toAbsolutePath().normalize().toString(), metadata.path());
+        assertEquals(path.toAbsolutePath().normalize(), metadata.path());
         assertEquals("song.mp3", metadata.fileName());
         assertEquals(tempDir.toAbsolutePath().normalize().toString(), metadata.indexedPath());
         assertEquals("Song Title", metadata.title());
@@ -159,7 +159,7 @@ class SoundFileMetadataMapperTest {
         SoundFileMetadata metadata = mapper().toMetadata(audioFile(path, "MP3", null), null);
 
         assertEquals(SoundFileType.MP3, metadata.format());
-        assertEquals(path.toAbsolutePath().normalize().toString(), metadata.path());
+        assertEquals(path.toAbsolutePath().normalize(), metadata.path());
         assertEquals("song.mp3", metadata.fileName());
         assertNull(metadata.indexedPath());
         assertNull(metadata.title());

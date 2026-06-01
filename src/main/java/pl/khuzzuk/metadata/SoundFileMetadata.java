@@ -7,7 +7,7 @@ import java.util.Objects;
 
 public class SoundFileMetadata {
     private SoundFileType format;
-    private String path;
+    private Path path;
     private String fileName;
     private String indexedPath;
     private String title;
@@ -46,7 +46,7 @@ public class SoundFileMetadata {
 
     public SoundFileMetadata(
             SoundFileType format,
-            String path,
+            Path path,
             String fileName,
             String indexedPath,
             String title,
@@ -130,7 +130,7 @@ public class SoundFileMetadata {
                 .orElseThrow(() -> new IllegalArgumentException("Unsupported sound file path: " + path));
         return new SoundFileMetadata(
                 format,
-                path.toAbsolutePath().normalize().toString(),
+                path.toAbsolutePath().normalize(),
                 path.getFileName().toString(),
                 indexedPath == null ? null : indexedPath.toAbsolutePath().normalize().toString(),
                 null,
@@ -176,11 +176,11 @@ public class SoundFileMetadata {
         this.format = Objects.requireNonNull(format, "format");
     }
 
-    public String getPath() {
+    public Path getPath() {
         return path;
     }
 
-    public void setPath(String path) {
+    public void setPath(Path path) {
         this.path = path;
     }
 
@@ -483,7 +483,7 @@ public class SoundFileMetadata {
         return getFormat();
     }
 
-    public String path() {
+    public Path path() {
         return getPath();
     }
 

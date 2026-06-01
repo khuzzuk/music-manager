@@ -20,7 +20,7 @@ public class SoundFileMetadataMapper {
         org.jaudiotagger.tag.Tag tag = audioFile.getTag();
         return new SoundFileMetadata(
                 format,
-                path.toAbsolutePath().normalize().toString(),
+                path.toAbsolutePath().normalize(),
                 path.getFileName().toString(),
                 indexedPath == null ? null : indexedPath.toAbsolutePath().normalize().toString(),
                 getFirst(tag, FieldKey.TITLE),

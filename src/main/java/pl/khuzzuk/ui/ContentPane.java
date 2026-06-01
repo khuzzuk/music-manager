@@ -1,37 +1,38 @@
 package pl.khuzzuk.ui;
 
 import pl.khuzzuk.Context;
+import pl.khuzzuk.index.IndexProgress;
 import pl.khuzzuk.index.IndexItem;
 
+import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
+import javax.swing.SwingUtilities;
 import java.awt.CardLayout;
-import java.awt.Color;
-import java.awt.FontMetrics;
-import java.awt.Graphics;
-import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
-import java.awt.RenderingHints;
 import java.util.List;
 
 public class ContentPane extends JPanel {
     private static final String TRACKS_CARD = "tracks";
-    private static final String LOADING_CARD = "loading";
-    private static final Color LOADING_DOT_COLOR = new Color(80, 130, 190);
-    private static final Color LOADING_TEXT_COLOR = new Color(80, 80, 80);
+    private static final String PROGRESS_CARD = "progress";
 
     private final CardLayout tracksCardLayout = new CardLayout();
     private final JPanel tracksArea = new JPanel(tracksCardLayout);
     private final TracksTable tracksTable;
+    private final ProgressPanel progressPanel = new ProgressPanel();
+    private boolean indexing;
 
     public ContentPane(Context context, PlaylistPane playlist) {
         super(new GridBagLayout());
 
         this.tracksTable = new TracksTable(context, playlist::addTracks);
         tracksArea.add(new JScrollPane(tracksTable), TRACKS_CARD);
-        tracksArea.add(new LoadingPanel(), LOADING_CARD);
+        tracksArea.add(progressPanel, PROGRESS_CARD);
+        context.indexService().addProgressListener(progress ->
+                SwingUtilities.invokeLater(() -> showIndexingProgress(progress)));
 
         FileTree fileTree = new FileTree(context, this::showMappedFiles);
 
@@ -59,41 +60,76 @@ public class ContentPane extends JPanel {
             return;
         }
 
-        showLoading();
-        tracksTable.showMappedFiles(files, this::showTracks);
+        showLoadingProgress(0, files.size());
+        tracksTable.showMappedFiles(
+                files,
+                this::showTracks,
+                (processedFiles, totalFiles) ->
+                        SwingUtilities.invokeLater(() -> showLoadingProgress(processedFiles, totalFiles)),
+                () -> SwingUtilities.invokeLater(this::showTracks));
     }
 
-    private void showLoading() {
-        tracksCardLayout.show(tracksArea, LOADING_CARD);
+    private void showLoadingProgress(int processedFiles, int totalFiles) {
+        if (indexing) {
+            return;
+        }
+
+        progressPanel.updateProgress("Wczytywanie...", processedFiles, totalFiles);
+        tracksCardLayout.show(tracksArea, PROGRESS_CARD);
     }
 
     private void showTracks() {
+        if (indexing) {
+            return;
+        }
+
         tracksCardLayout.show(tracksArea, TRACKS_CARD);
     }
 
-    private static class LoadingPanel extends JPanel {
-        @Override
-        protected void paintComponent(Graphics graphics) {
-            super.paintComponent(graphics);
-            Graphics2D g = (Graphics2D) graphics.create();
-            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+    private void showIndexingProgress(IndexProgress progress) {
+        indexing = progress.running();
+        if (progress.running()) {
+            progressPanel.updateProgress(progress.message(), progress.processedFiles(), progress.totalFiles());
+            tracksCardLayout.show(tracksArea, PROGRESS_CARD);
+            return;
+        }
 
-            String text = "Wczytywanie...";
-            FontMetrics metrics = g.getFontMetrics();
-            int dotSize = 10;
-            int gap = 8;
-            int textWidth = metrics.stringWidth(text);
-            int totalWidth = dotSize + gap + textWidth;
-            int x = Math.max(0, (getWidth() - totalWidth) / 2);
-            int centerY = getHeight() / 2;
-            int dotY = centerY - dotSize / 2;
-            int textY = centerY + (metrics.getAscent() - metrics.getDescent()) / 2;
+        showTracks();
+    }
 
-            g.setColor(LOADING_DOT_COLOR);
-            g.fillOval(x, dotY, dotSize, dotSize);
-            g.setColor(LOADING_TEXT_COLOR);
-            g.drawString(text, x + dotSize + gap, textY);
-            g.dispose();
+    private static class ProgressPanel extends JPanel {
+        private final JLabel label = new JLabel("Wczytywanie...");
+        private final JProgressBar progressBar = new JProgressBar();
+
+        private ProgressPanel() {
+            super(new GridBagLayout());
+            progressBar.setStringPainted(true);
+
+            GridBagConstraints c = new GridBagConstraints();
+            c.gridx = 0;
+            c.gridy = 0;
+            c.insets = new Insets(0, 20, 8, 20);
+            add(label, c);
+
+            c.gridy = 1;
+            c.fill = GridBagConstraints.HORIZONTAL;
+            c.weightx = 1.0;
+            add(progressBar, c);
+        }
+
+        private void updateProgress(String message, int processedFiles, int totalFiles) {
+            label.setText(message);
+            boolean determinate = totalFiles > 0;
+            progressBar.setIndeterminate(!determinate);
+            if (!determinate) {
+                progressBar.setString("");
+                return;
+            }
+
+            progressBar.setMinimum(0);
+            progressBar.setMaximum(totalFiles);
+            progressBar.setValue(processedFiles);
+            progressBar.setString(processedFiles + " / " + totalFiles);
         }
     }
 }

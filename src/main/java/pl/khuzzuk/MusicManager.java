@@ -5,6 +5,7 @@ import pl.khuzzuk.index.IndexReaderService;
 import pl.khuzzuk.index.IndexService;
 import pl.khuzzuk.metadata.DocumentMapper;
 import pl.khuzzuk.metadata.MetadataFieldKeyMapper;
+import pl.khuzzuk.metadata.MetadataIndexReaderService;
 import pl.khuzzuk.metadata.MetadataReaderService;
 import pl.khuzzuk.metadata.MetadataIndexWriterService;
 import pl.khuzzuk.metadata.MetadataWriterService;
@@ -46,10 +47,16 @@ public class MusicManager {
             MetadataFieldKeyMapper metadataFieldKeyMapper = new MetadataFieldKeyMapper();
             MetadataWriterService metadataWriterService = new MetadataWriterService(metadataFieldKeyMapper);
             DocumentMapper documentMapper = new DocumentMapper();
+            MetadataIndexReaderService metadataIndexReaderService =
+                    new MetadataIndexReaderService(METADATA_INDEX_PATH, documentMapper);
             MetadataIndexWriterService metadataIndexWriterService =
                     new MetadataIndexWriterService(METADATA_INDEX_PATH, documentMapper);
             createIndexFileIfMissing();
-            IndexService indexService = new IndexService(INDEX_PATH, metadataReaderService, metadataIndexWriterService);
+            IndexService indexService = new IndexService(
+                    INDEX_PATH,
+                    metadataReaderService,
+                    metadataIndexReaderService,
+                    metadataIndexWriterService);
             IndexReaderService indexReaderService = new IndexReaderService(INDEX_PATH);
             indexReaderService.read();
             SoundPlayer soundPlayer = new SoundPlayerRouter(new MP3Player(), new FLACPlayer());
@@ -57,6 +64,7 @@ public class MusicManager {
                     settingsService,
                     metadataReaderService,
                     metadataWriterService,
+                    metadataIndexReaderService,
                     metadataIndexWriterService,
                     indexService,
                     indexReaderService,

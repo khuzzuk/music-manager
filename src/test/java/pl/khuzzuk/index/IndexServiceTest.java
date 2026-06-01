@@ -1,6 +1,7 @@
 package pl.khuzzuk.index;
 
 import pl.khuzzuk.metadata.MetadataReaderService;
+import pl.khuzzuk.metadata.MetadataIndexReaderService;
 import pl.khuzzuk.metadata.MetadataIndexWriterService;
 import pl.khuzzuk.metadata.SoundFileMetadata;
 import pl.khuzzuk.metadata.DocumentMapper;
@@ -11,8 +12,11 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -396,28 +400,108 @@ class IndexServiceTest {
     void writesMetadataWhenIndexingSoundFiles() throws IOException {
         Path music = Files.createDirectory(tempDir.resolve("music"));
         Path song = Files.createFile(music.resolve("song.mp3"));
+        Path album = Files.createFile(music.resolve("album.flac"));
         Path indexPath = tempDir.resolve("index.dat");
-        SoundFileMetadata metadata = SoundFileMetadata.empty(song);
-        AtomicReference<SoundFileMetadata> writtenMetadata = new AtomicReference<>();
+        List<Path> readMetadataPaths = new ArrayList<>();
+        List<Path> writtenMetadataPaths = new ArrayList<>();
+        List<IndexProgress> progressEvents = new ArrayList<>();
         MetadataReaderService metadataReaderService = new MetadataReaderService() {
             @Override
-            public SoundFileMetadata readMetadata(Path path) {
-                assertEquals(song.toAbsolutePath().normalize(), path);
-                return metadata;
+            public SoundFileMetadata readMetadata(Path path) throws IOException {
+                assertTrue(Files.readString(indexPath).contains(escape(path.toString())));
+                readMetadataPaths.add(path);
+                return SoundFileMetadata.empty(path);
             }
         };
         MetadataIndexWriterService metadataIndexWriterService = new MetadataIndexWriterService(
                 tempDir.resolve("metadata-index"),
                 new DocumentMapper()) {
             @Override
-            public void writeMetadata(SoundFileMetadata metadata) {
-                writtenMetadata.set(metadata);
+            public void writeMetadata(List<SoundFileMetadata> metadataItems) {
+                writtenMetadataPaths.addAll(metadataItems.stream()
+                        .map(SoundFileMetadata::path)
+                        .toList());
             }
         };
 
-        new IndexService(indexPath, metadataReaderService, metadataIndexWriterService).index(new RootIndexItem(), List.of(music));
+        IndexService indexService = new IndexService(indexPath, metadataReaderService, metadataIndexWriterService);
+        indexService.addProgressListener(progressEvents::add);
+        indexService.index(new RootIndexItem(), List.of(music));
 
-        assertSame(metadata, writtenMetadata.get());
+        List<Path> expectedPaths = Stream.of(album, song)
+                .map(path -> path.toAbsolutePath().normalize())
+                .toList();
+        assertEquals(expectedPaths, readMetadataPaths);
+        assertEquals(expectedPaths, writtenMetadataPaths);
+        assertEquals(List.of(
+                IndexProgress.started(),
+                IndexProgress.metadata(0, 2),
+                IndexProgress.metadata(1, 2),
+                IndexProgress.metadata(2, 2),
+                IndexProgress.finished()), progressEvents);
+    }
+
+    @Test
+    void reindexDirectoryChangesReadsOnlyNewOrChangedMetadataAndDeletesMissingMetadata() throws IOException {
+        Path music = Files.createDirectory(tempDir.resolve("music"));
+        Path unchanged = Files.createFile(music.resolve("unchanged.mp3")).toAbsolutePath().normalize();
+        Path added = Files.createFile(music.resolve("added.mp3")).toAbsolutePath().normalize();
+        Path deleted = music.resolve("deleted.mp3").toAbsolutePath().normalize();
+        Path indexPath = tempDir.resolve("index.dat");
+        List<Path> readMetadataPaths = new ArrayList<>();
+        List<Path> writtenMetadataPaths = new ArrayList<>();
+        List<Path> deletedMetadataPaths = new ArrayList<>();
+
+        RootIndexItem root = new RootIndexItem();
+        DirectoryIndexItem existingMusic = new DirectoryIndexItem(music);
+        existingMusic.setParent(root);
+        SoundFileIndexItem unchangedItem = new SoundFileIndexItem(unchanged);
+        unchangedItem.setParent(existingMusic);
+        SoundFileIndexItem deletedItem = new SoundFileIndexItem(deleted);
+        deletedItem.setParent(existingMusic);
+        existingMusic.addChildren(List.of(unchangedItem, deletedItem));
+        root.addChildren(List.of(existingMusic));
+
+        MetadataReaderService metadataReaderService = new MetadataReaderService() {
+            @Override
+            public SoundFileMetadata readMetadata(Path path) {
+                readMetadataPaths.add(path);
+                return SoundFileMetadata.empty(path);
+            }
+        };
+        MetadataIndexReaderService metadataIndexReaderService = new MetadataIndexReaderService(
+                tempDir.resolve("metadata-index"),
+                new DocumentMapper()) {
+            @Override
+            public Map<Path, SoundFileMetadata> readMetadata(List<Path> paths) {
+                return Map.of(unchanged, SoundFileMetadata.empty(unchanged));
+            }
+        };
+        MetadataIndexWriterService metadataIndexWriterService = new MetadataIndexWriterService(
+                tempDir.resolve("metadata-index"),
+                new DocumentMapper()) {
+            @Override
+            public void writeMetadata(List<SoundFileMetadata> metadataItems) {
+                writtenMetadataPaths.addAll(metadataItems.stream()
+                        .map(SoundFileMetadata::path)
+                        .toList());
+            }
+
+            @Override
+            public void deleteMetadata(List<Path> paths) {
+                deletedMetadataPaths.addAll(paths);
+            }
+        };
+
+        new IndexService(indexPath, metadataReaderService, metadataIndexReaderService, metadataIndexWriterService)
+                .reindexDirectoryChanges(existingMusic);
+
+        assertEquals(List.of(added), readMetadataPaths);
+        assertEquals(List.of(added), writtenMetadataPaths);
+        assertEquals(List.of(deleted), deletedMetadataPaths);
+        assertEquals(List.of("added.mp3", "unchanged.mp3"), existingMusic.getChildren().stream()
+                .map(IndexItem::getName)
+                .toList());
     }
 
     @Test

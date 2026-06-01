@@ -3,6 +3,8 @@ package pl.khuzzuk.metadata;
 import org.junit.jupiter.api.Test;
 import pl.khuzzuk.player.SoundFileType;
 
+import java.nio.file.Path;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -52,7 +54,7 @@ class SoundFileMetadataUpdateMapperTest {
     private SoundFileMetadata metadata() {
         return new SoundFileMetadata(
                 SoundFileType.MP3,
-                "C:\\music\\song.mp3",
+                Path.of("C:\\music\\song.mp3"),
                 "song.mp3",
                 null,
                 "Title",

@@ -12,6 +12,7 @@ import javax.swing.JOptionPane;
 import javax.swing.JTree;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import javax.swing.UIManager;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
@@ -31,6 +32,7 @@ import java.util.function.Consumer;
 public class FileTree extends JTree {
     private static final Color SELECTION_BACKGROUND = new Color(218, 235, 252);
     private static final String REINDEX_SELECTED_DIRECTORY_ACTION = "reindexSelectedDirectory";
+    private static final String REINDEX_SELECTED_DIRECTORY_CHANGES_ACTION = "reindexSelectedDirectoryChanges";
     private final IndexService indexService;
     private final Consumer<List<IndexItem>> selectedFilesConsumer;
 
@@ -87,12 +89,21 @@ public class FileTree extends JTree {
         getActionMap().put(REINDEX_SELECTED_DIRECTORY_ACTION, new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent event) {
-                reindexSelectedDirectory();
+                reindexSelectedDirectory(false);
+            }
+        });
+        getInputMap(WHEN_FOCUSED).put(
+                KeyStroke.getKeyStroke(KeyEvent.VK_INSERT, KeyEvent.CTRL_DOWN_MASK),
+                REINDEX_SELECTED_DIRECTORY_CHANGES_ACTION);
+        getActionMap().put(REINDEX_SELECTED_DIRECTORY_CHANGES_ACTION, new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent event) {
+                reindexSelectedDirectory(true);
             }
         });
     }
 
-    private void reindexSelectedDirectory() {
+    private void reindexSelectedDirectory(boolean changesOnly) {
         TreePath selectionPath = getSelectionPath();
         if (selectionPath == null) {
             return;
@@ -104,19 +115,35 @@ public class FileTree extends JTree {
         }
 
         Action action = getActionMap().get(REINDEX_SELECTED_DIRECTORY_ACTION);
+        Action changesAction = getActionMap().get(REINDEX_SELECTED_DIRECTORY_CHANGES_ACTION);
         action.setEnabled(false);
-        try {
-            indexService.reindexDirectory(selectedItem);
-            selectedFilesConsumer.accept(collectFiles(selectedItem));
-        } catch (IOException e) {
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Nie udalo sie przeindeksowac katalogu.",
-                    "Blad indeksowania",
-                    JOptionPane.ERROR_MESSAGE);
-        } finally {
-            action.setEnabled(true);
-        }
+        changesAction.setEnabled(false);
+        new SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() throws IOException {
+                if (changesOnly) {
+                    indexService.reindexDirectoryChanges(selectedItem);
+                } else {
+                    indexService.reindexDirectory(selectedItem);
+                }
+                return null;
+            }
+
+            @Override
+            protected void done() {
+                action.setEnabled(true);
+                changesAction.setEnabled(true);
+                try {
+                    get();
+                } catch (Exception e) {
+                    JOptionPane.showMessageDialog(
+                            FileTree.this,
+                            "Nie udalo sie przeindeksowac katalogu.",
+                            "Blad indeksowania",
+                            JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        }.execute();
     }
 
     private IndexItem getSelectedIndexItem() {
@@ -214,6 +241,10 @@ public class FileTree extends JTree {
     private class FileTreeSelectionListener extends MouseAdapter {
         @Override
         public void mousePressed(MouseEvent event) {
+            if (!SwingUtilities.isLeftMouseButton(event)) {
+                return;
+            }
+
             TreePath path = getClosestPathForLocation(event.getX(), event.getY());
             if (path == null) {
                 return;

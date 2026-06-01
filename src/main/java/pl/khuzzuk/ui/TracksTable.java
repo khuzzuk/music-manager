@@ -2,8 +2,6 @@ package pl.khuzzuk.ui;
 
 import pl.khuzzuk.Context;
 import pl.khuzzuk.index.IndexItem;
-import pl.khuzzuk.index.SoundFileIndexItem;
-import pl.khuzzuk.metadata.MetadataReaderService;
 import pl.khuzzuk.metadata.MetadataIndexWriterService;
 import pl.khuzzuk.metadata.MetadataWriterService;
 import pl.khuzzuk.metadata.SoundFileMetadata;
@@ -19,7 +17,6 @@ import javax.swing.Action;
 import javax.swing.JOptionPane;
 import javax.swing.JTable;
 import javax.swing.KeyStroke;
-import javax.swing.SwingWorker;
 import javax.swing.SwingUtilities;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableColumnModel;
@@ -33,15 +30,17 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 public class TracksTable extends JTable {
     private static final String ADD_SELECTED_TO_PLAYLIST_ACTION = "addSelectedToPlaylist";
     private static final String EDIT_SELECTED_METADATA_ACTION = "editSelectedMetadata";
     private final SettingsService settingsService;
-    private final MetadataReaderService metadataReaderService;
     private final MetadataWriterService metadataWriterService;
     private final MetadataIndexWriterService metadataIndexWriterService;
+    private final TracksTableController controller;
     private final Consumer<List<SoundFileMetadata>> selectedTracksConsumer;
     private final SoundFileMetadataUpdateMapper soundFileMetadataUpdateMapper = new SoundFileMetadataUpdateMapper();
     private final List<Path> rowPaths = new ArrayList<>();
@@ -50,14 +49,12 @@ public class TracksTable extends JTable {
     private int previewRow = -1;
     private int previewModelColumn = -1;
     private boolean updatingModel;
-    private SwingWorker<List<LoadedTrack>, Void> loadWorker;
-    private int loadGeneration;
 
     public TracksTable(Context context, Consumer<List<SoundFileMetadata>> selectedTracksConsumer) {
         this.settingsService = context.settingsService();
-        this.metadataReaderService = context.metadataReaderService();
         this.metadataWriterService = context.metadataWriterService();
         this.metadataIndexWriterService = context.metadataIndexWriterService();
+        this.controller = new TracksTableController(context);
         this.selectedTracksConsumer = selectedTracksConsumer;
         List<TrackColumn> configuredColumns = context.settingsService().getSettings().trackColumns();
         this.columns = configuredColumns == null || configuredColumns.isEmpty()
@@ -77,59 +74,42 @@ public class TracksTable extends JTable {
     }
 
     public void showMappedFiles(List<IndexItem> files, Runnable loadedCallback) {
-        int generation = ++loadGeneration;
-        cancelLoadWorker();
+        showMappedFiles(files, loadedCallback, null, null);
+    }
+
+    public void showMappedFiles(
+            List<IndexItem> files,
+            Runnable loadedCallback,
+            BiConsumer<Integer, Integer> progressConsumer,
+            Runnable finishedProgressCallback) {
         clearRatingPreview();
 
         if (files == null || files.isEmpty()) {
+            notifyProgressFinished(finishedProgressCallback);
             showLoadedFiles(List.of());
             notifyLoaded(loadedCallback);
             return;
         }
 
-        List<IndexItem> filesSnapshot = List.copyOf(files);
-        loadWorker = new SwingWorker<>() {
-            @Override
-            protected List<LoadedTrack> doInBackground() {
-                List<LoadedTrack> loadedTracks = new ArrayList<>();
-                for (IndexItem file : filesSnapshot) {
-                    if (isCancelled()) {
-                        return List.of();
-                    }
+        controller.loadFiles(
+                files,
+                progressConsumer,
+                loadedTracks -> {
+                    showLoadedFiles(loadedTracks);
+                    notifyProgressFinished(finishedProgressCallback);
+                    notifyLoaded(loadedCallback);
+                },
+                ignored -> JOptionPane.showMessageDialog(
+                        TracksTable.this,
+                        "Nie udalo sie wczytac metadanych.",
+                        "Blad odczytu",
+                        JOptionPane.ERROR_MESSAGE));
+    }
 
-                    SoundFileMetadata metadata;
-                    if (file instanceof SoundFileIndexItem soundFileIndexItem) {
-                        metadata = readMetadata(soundFileIndexItem);
-                    } else {
-                        metadata = SoundFileMetadata.empty(file.getPath());
-                    }
-
-                    loadedTracks.add(new LoadedTrack(file.getPath(), metadata));
-                }
-
-                return loadedTracks;
-            }
-
-            @Override
-            protected void done() {
-                if (isCancelled() || generation != loadGeneration) {
-                    return;
-                }
-
-                try {
-                    showLoadedFiles(get());
-                } catch (Exception e) {
-                    showLoadedFiles(List.of());
-                    JOptionPane.showMessageDialog(
-                            TracksTable.this,
-                            "Nie udalo sie wczytac metadanych.",
-                            "Blad odczytu",
-                            JOptionPane.ERROR_MESSAGE);
-                }
-                notifyLoaded(loadedCallback);
-            }
-        };
-        loadWorker.execute();
+    private void notifyProgressFinished(Runnable finishedProgressCallback) {
+        if (finishedProgressCallback != null) {
+            finishedProgressCallback.run();
+        }
     }
 
     private void notifyLoaded(Runnable loadedCallback) {
@@ -138,22 +118,16 @@ public class TracksTable extends JTable {
         }
     }
 
-    private void cancelLoadWorker() {
-        if (loadWorker != null && !loadWorker.isDone()) {
-            loadWorker.cancel(true);
-        }
-    }
-
-    private void showLoadedFiles(List<LoadedTrack> loadedTracks) {
+    private void showLoadedFiles(List<SoundFileMetadata> loadedTracks) {
         rowPaths.clear();
         rowMetadata.clear();
         DefaultTableModel model = createTableModel();
 
-        for (LoadedTrack loadedTrack : loadedTracks) {
+        for (SoundFileMetadata loadedTrack : loadedTracks) {
             rowPaths.add(loadedTrack.path());
-            rowMetadata.add(loadedTrack.metadata());
+            rowMetadata.add(loadedTrack);
             model.addRow(columns.stream()
-                    .map(column -> column.tag().getValue(loadedTrack.metadata()))
+                    .map(column -> column.tag().getValue(loadedTrack))
                     .toArray());
         }
 
@@ -299,7 +273,7 @@ public class TracksTable extends JTable {
 
         soundFileMetadataUpdateMapper.setValue(metadata, tag, value);
         updateVisibleCell(row, tag, tag.getValue(metadata));
-        writeMetadataIndex(metadata, true);
+        writeMetadataIndex(metadata);
         return true;
     }
 
@@ -310,7 +284,7 @@ public class TracksTable extends JTable {
 
         String oldValue = normalizeValue(currentValue);
         String value = normalizeValue(newValue);
-        return !equalsNullable(oldValue, value);
+        return !Objects.equals(oldValue, value);
     }
 
     private int toRating(Object value) {
@@ -337,16 +311,6 @@ public class TracksTable extends JTable {
         }
 
         setModelValue(row, column, value);
-    }
-
-    private SoundFileMetadata readMetadata(SoundFileIndexItem soundFileIndexItem) {
-        try {
-            SoundFileMetadata metadata = metadataReaderService.readMetadata(soundFileIndexItem.getPath());
-            writeMetadataIndex(metadata, false);
-            return metadata;
-        } catch (IOException | SecurityException e) {
-            return SoundFileMetadata.empty(soundFileIndexItem.getPath());
-        }
     }
 
     private void applyColumnWidths() {
@@ -466,7 +430,7 @@ public class TracksTable extends JTable {
         SoundFileMetadata metadata = rowMetadata.get(ratingCell.row());
         soundFileMetadataUpdateMapper.setValue(metadata, Tag.RATING, ratingCell.rating());
         setModelValue(ratingCell.row(), ratingCell.modelColumn(), ratingCell.rating());
-        writeMetadataIndex(metadata, true);
+        writeMetadataIndex(metadata);
     }
 
     private Object commitFieldEdit(int row, Tag tag, Object value) {
@@ -474,7 +438,7 @@ public class TracksTable extends JTable {
         Object currentValue = tag.getValue(metadata);
         String newValue = normalizeValue(value);
         String oldValue = normalizeValue(currentValue);
-        if (equalsNullable(oldValue, newValue)) {
+        if (Objects.equals(oldValue, newValue)) {
             return currentValue;
         }
 
@@ -491,7 +455,7 @@ public class TracksTable extends JTable {
         }
 
         soundFileMetadataUpdateMapper.setValue(metadata, tag, newValue);
-        writeMetadataIndex(metadata, true);
+        writeMetadataIndex(metadata);
         return newValue;
     }
 
@@ -513,18 +477,10 @@ public class TracksTable extends JTable {
         return text.isEmpty() ? null : text;
     }
 
-    private boolean equalsNullable(String first, String second) {
-        return first == null ? second == null : first.equals(second);
-    }
-
-    private void writeMetadataIndex(SoundFileMetadata metadata, boolean showError) {
+    private void writeMetadataIndex(SoundFileMetadata metadata) {
         try {
             metadataIndexWriterService.writeMetadata(metadata);
         } catch (IOException | SecurityException e) {
-            if (!showError) {
-                return;
-            }
-
             JOptionPane.showMessageDialog(
                     this,
                     "Nie udalo sie zaktualizowac indeksu metadanych.",
@@ -534,9 +490,6 @@ public class TracksTable extends JTable {
     }
 
     private record RatingCell(int row, int modelColumn, int rating) {
-    }
-
-    private record LoadedTrack(Path path, SoundFileMetadata metadata) {
     }
 
     private class SaveColumnsListener extends MouseAdapter {

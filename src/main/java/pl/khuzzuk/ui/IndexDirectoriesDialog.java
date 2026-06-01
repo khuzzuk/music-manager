@@ -15,6 +15,7 @@ import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.SwingWorker;
 import java.awt.BorderLayout;
 import java.awt.Window;
 import java.io.File;
@@ -27,6 +28,7 @@ public class IndexDirectoriesDialog extends JDialog {
     private final SettingsService settingsService;
     private final IndexService indexService;
     private final IndexReaderService indexReaderService;
+    private JButton addButton;
 
     public IndexDirectoriesDialog(Window owner, Context context) {
         super(owner, "Indeksowane katalogi");
@@ -51,7 +53,7 @@ public class IndexDirectoriesDialog extends JDialog {
         JList<Path> indexedPathsList = new JList<>(indexedPathsModel);
         add(new JScrollPane(indexedPathsList), BorderLayout.CENTER);
 
-        JButton addButton = new JButton("Dodaj");
+        addButton = new JButton("Dodaj");
         addButton.addActionListener(ignored -> addIndexDirectory());
         JPanel buttonPanel = new JPanel();
         buttonPanel.add(addButton);
@@ -96,16 +98,43 @@ public class IndexDirectoriesDialog extends JDialog {
 
             try {
                 settingsService.saveSettings(newSettings);
-                RootIndexItem root = indexReaderService.getCurrentRootIndexItem();
-                indexService.index(root, indexedPaths);
-                refresh();
             } catch (IOException e) {
                 JOptionPane.showMessageDialog(
                         this,
-                        "Nie udalo sie zapisac ustawien lub indeksu.",
+                        "Nie udalo sie zapisac ustawien.",
                         "Blad zapisu",
                         JOptionPane.ERROR_MESSAGE);
+                return;
             }
+
+            startIndexing(indexedPaths, addButton);
         }
+    }
+
+    private void startIndexing(List<Path> indexedPaths, JButton addButton) {
+        addButton.setEnabled(false);
+        RootIndexItem root = indexReaderService.getCurrentRootIndexItem();
+        new SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() throws IOException {
+                indexService.index(root, indexedPaths);
+                return null;
+            }
+
+            @Override
+            protected void done() {
+                addButton.setEnabled(true);
+                try {
+                    get();
+                    refresh();
+                } catch (Exception e) {
+                    JOptionPane.showMessageDialog(
+                            IndexDirectoriesDialog.this,
+                            "Nie udalo sie zapisac indeksu.",
+                            "Blad indeksowania",
+                            JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        }.execute();
     }
 }

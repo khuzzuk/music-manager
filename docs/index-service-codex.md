@@ -8,6 +8,8 @@ implementations, error handling, and change contracts.
 
 - `src/main/java/pl/khuzzuk/index/IndexService.java` - builds an `IndexItem` tree
   from one or more filesystem paths and writes the result to `index.dat`.
+- `src/main/java/pl/khuzzuk/index/IndexProgress.java` - immutable progress event
+  emitted by `IndexService` while filesystem and metadata indexing runs.
 - `src/main/java/pl/khuzzuk/index/IndexReaderService.java` - reads `index.dat`
   and reconstructs a `RootIndexItem` tree.
 - `index.dat` - generated index output written by `IndexService.index(...)`.
@@ -16,14 +18,18 @@ implementations, error handling, and change contracts.
 - `src/main/java/pl/khuzzuk/metadata/MetadataReaderService.java` - reads audio
   metadata from files.
 - `src/main/java/pl/khuzzuk/metadata/SoundFileMetadataMapper.java` - maps
-  jaudiotagger `AudioFile` objects to `SoundFileMetadata`; mapped file `path` and
-  `format` are expected to be present. `format` is a non-null `SoundFileType`
+  jaudiotagger `AudioFile` objects to `SoundFileMetadata`; mapped file `path`
+  (`Path`) and `format` are expected to be present. `format` is a non-null `SoundFileType`
   because indexing only reads metadata for supported sound-file extensions. Track
   duration is read from the jaudiotagger `AudioHeader`.
 - `src/main/java/pl/khuzzuk/metadata/MoodConverter.java` - resolves mood values,
   including fallback values stored in comment frames.
 - `src/main/java/pl/khuzzuk/metadata/MetadataIndexWriterService.java` - writes
-  metadata documents into the Lucene index.
+  metadata documents into the Lucene index, including batch writes that reuse one
+  `IndexWriter` for many files.
+- `src/main/java/pl/khuzzuk/metadata/MetadataIndexReaderService.java` - reads
+  current metadata documents from the Lucene index by path so table loading can
+  avoid reopening audio files when cached metadata is still valid.
 - `src/main/java/pl/khuzzuk/index/IndexItem.java` - common tree node interface.
 - `src/main/java/pl/khuzzuk/index/RootIndexItem.java` - virtual root node named
   `root`.
@@ -43,10 +49,13 @@ implementations, error handling, and change contracts.
 virtual `RootIndexItem`, and writes the resulting tree to `index.dat`.
 `IndexReaderService` reads `index.dat` back into the same tree model. The indexing
 package is responsible for filesystem traversal and index persistence. During
-indexing, `IndexService` reads metadata for supported sound files through
-`MetadataReaderService` and writes it to a separate Lucene metadata index through
-`MetadataIndexWriterService`. It does not attach metadata to `SoundFileIndexItem`, build
-Swing tree nodes, or connect the index to the player.
+indexing, `IndexService` first builds and persists the filesystem index, then
+collects supported sound-file paths from the built tree, reads metadata through
+`MetadataReaderService`, and writes it to a separate Lucene metadata index through
+`MetadataIndexWriterService`. It does not attach metadata to `SoundFileIndexItem`,
+build Swing tree nodes, or connect the index to the player.
+`TracksTable` reads metadata from `MetadataIndexReaderService` first and falls
+back to `MetadataReaderService` only when the Lucene cache is missing or stale.
 
 The current implementation treats non-directory paths as `SoundFileIndexItem`
 only when `SoundFileType.fromPath(path)` resolves a supported type.
@@ -61,13 +70,24 @@ public IndexService(
         MetadataReaderService metadataReaderService,
         MetadataIndexWriterService metadataIndexWriterService)
 public void addIndexListener(Consumer<RootIndexItem> listener)
-public void removeIndexListener(Consumer<RootIndexItem> listener)
+public void addProgressListener(Consumer<IndexProgress> listener)
+public void removeProgressListener(Consumer<IndexProgress> listener)
+public void reindexDirectory(IndexItem directory)
+public void reindexDirectoryChanges(IndexItem directory)
 ```
 
 The constructor injects the output file location, metadata reader, and Lucene
 metadata writer.
 Listeners are notified with the supplied `RootIndexItem` after a successful
 `index(...)` call and after the index has been written.
+Progress listeners receive `IndexProgress.started()` before scanning begins,
+`IndexProgress.metadata(processed, total)` after the sound-file list has been
+collected from the saved tree and after each metadata file is processed, and
+`IndexProgress.finished()` in a `finally` block.
+`reindexDirectory(...)` forces a fresh metadata read for every indexed sound file
+under the selected directory. `reindexDirectoryChanges(...)` synchronizes the tree
+but reads metadata only for new or stale files according to the Lucene metadata
+index, and removes metadata documents for files no longer present in the tree.
 
 ### index(RootIndexItem, List<Path>)
 
@@ -102,6 +122,8 @@ Current behavior:
   longer present in the current filesystem listing for that directory;
 - sorts children after merging;
 - writes the tree to the configured index path;
+- collects all indexed sound-file paths from the persisted tree and updates the
+  metadata index after the filesystem index has been written;
 - returns the `RootIndexItem`.
 
 ## Internal Flow
@@ -134,21 +156,25 @@ Current flow:
 6. Directory children recurse through `mergeDirectory(...)`.
 7. Supported non-directory children create a `SoundFileIndexItem` only when a
    same-name `SoundFileIndexItem` is not already present under the parent.
-8. Supported non-directory children read metadata through `MetadataReaderService`
-   and write it through `MetadataIndexWriterService`. Metadata read/write failures are
-   best-effort and do not stop filesystem indexing.
+8. Supported non-directory children do not read or write metadata during tree
+   merging.
 9. After merging a directory, its children are sorted by
    `IndexItem.getName()` with `String.CASE_INSENSITIVE_ORDER`.
 10. If a newly-created directory cannot be listed because of `IOException` or
    `SecurityException`, the new directory node is replaced with an
    `UnreadableIndexItem`. If an existing directory cannot be listed, the existing
    tree node is kept as-is.
+11. After the tree is saved to `index.dat`, `IndexService` collects all
+    `SoundFileIndexItem` paths from the relevant tree and updates the Lucene
+    metadata index with a batch write. Metadata read/write failures are
+    best-effort and do not stop filesystem indexing.
 
 `getName(Path)` uses `path.getFileName().toString()`. If `getFileName()` is `null`
 for a root path such as `C:\`, it falls back to `path.toString()`.
 
 After the tree is built, `saveIndex(IndexItem root)` writes the configured index
-path in UTF-8.
+path in UTF-8. Metadata indexing runs only after this filesystem index has been
+written.
 The current format is one line per persisted item, in pre-order traversal order.
 Directories are marked with a compact `D|` prefix, while sound files are written
 as bare escaped full paths. The leading empty line appears before root. Other
@@ -357,6 +383,8 @@ When changing this area, keep these rules:
 - `RootIndexItem.getChildren()` exposes a mutable list.
 - `IndexService` validates files by extension only. Metadata read/write failures
   do not reject a supported file; the filesystem node is still indexed.
+- Metadata cache entries are considered usable only when the stored file size and
+  last-modified timestamp match the current file.
 - `DirectoryIndexItem.getChildren()` exposes a mutable list.
 - `UnreadableIndexItem` does not store the exception or reason why reading failed.
 - Symbolic links are not handled specially. `Files.isDirectory(path)` follows links
@@ -427,10 +455,11 @@ listings are removed.
 Directory and sound-file items created by `IndexService` expose absolute normalized
 paths through `getPath()`. `UnreadableIndexItem.getPath()` returns its parent path.
 After building the tree, IndexService writes `index.dat` as UTF-8 text lines
-without explicit depth. Directories, including root, are written as
-`D|escaped-normalized-path`; sound files are written as bare escaped normalized
-paths. Root is written as `D|root` and is preceded by one empty line. Unreadable
-nodes are not persisted.
+without explicit depth, then collects `SoundFileIndexItem` paths from the built
+tree and updates the Lucene metadata index. Directories, including root, are
+written as `D|escaped-normalized-path`; sound files are written as bare escaped
+normalized paths. Root is written as `D|root` and is preceded by one empty line.
+Unreadable nodes are not persisted.
 
 `IndexReaderService` has an `IndexReaderService(Path indexPath)` constructor and
 `read() throws IOException`. It reads `D|...` directory path lines and bare

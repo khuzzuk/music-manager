@@ -36,7 +36,7 @@ public class PlaylistPane extends JScrollPane {
 
     public void addTracks(List<SoundFileMetadata> tracks) {
         for (SoundFileMetadata track : tracks) {
-            append(new PlaylistSoundFile(new SoundFile(track.path(), title(track))));
+            append(new PlaylistSoundFile(new SoundFile(track.path().toString(), title(track))));
         }
     }
 

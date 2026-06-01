@@ -41,7 +41,7 @@ class MetadataIndexWriterServiceTest {
     private SoundFileMetadata metadata(Path path, String title, int rating) {
         return new SoundFileMetadata(
                 SoundFileType.MP3,
-                path.toAbsolutePath().normalize().toString(),
+                path.toAbsolutePath().normalize(),
                 path.getFileName().toString(),
                 null,
                 title,

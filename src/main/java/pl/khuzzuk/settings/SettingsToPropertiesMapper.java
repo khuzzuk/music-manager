@@ -18,7 +18,7 @@ public class SettingsToPropertiesMapper {
             new TrackColumn(Tag.COMPOSER, 160),
             new TrackColumn(Tag.RATING, 70),
             new TrackColumn(Tag.MOOD, 120),
-            new TrackColumn(Tag.MOVEMENT, 120),
+            new TrackColumn(Tag.TEMPO, 120),
             new TrackColumn(Tag.OCCASION, 120));
     private static final String WINDOW_X_PROPERTY = "window.x";
     private static final String WINDOW_Y_PROPERTY = "window.y";

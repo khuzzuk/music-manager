@@ -14,7 +14,7 @@ class DocumentMapperTest {
         Path song = Path.of("song.mp3").toAbsolutePath().normalize();
         SoundFileMetadata metadata = new SoundFileMetadata(
                 SoundFileType.MP3,
-                song.toString(),
+                song,
                 "song.mp3",
                 null,
                 "Title",
