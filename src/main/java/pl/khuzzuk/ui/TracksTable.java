@@ -12,13 +12,18 @@ import pl.khuzzuk.settings.Settings;
 import pl.khuzzuk.settings.SettingsService;
 import pl.khuzzuk.settings.SettingsToPropertiesMapper;
 import pl.khuzzuk.settings.TrackColumn;
+import pl.khuzzuk.settings.TrackSort;
+import pl.khuzzuk.settings.TrackSortDirection;
 
 import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.JOptionPane;
 import javax.swing.JTable;
+import javax.swing.RowSorter;
 import javax.swing.KeyStroke;
+import javax.swing.SortOrder;
 import javax.swing.SwingUtilities;
+import javax.swing.event.RowSorterListener;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableColumnModel;
 import java.awt.Rectangle;
@@ -45,12 +50,16 @@ public class TracksTable extends JTable {
     private final TracksTableController controller;
     private final Consumer<List<SoundFileMetadata>> selectedTracksConsumer;
     private final SoundFileMetadataUpdateMapper soundFileMetadataUpdateMapper = new SoundFileMetadataUpdateMapper();
+    private final RowSorterListener sortListener = ignored -> rememberCurrentSort();
     private final List<Path> rowPaths = new ArrayList<>();
     private final List<SoundFileMetadata> rowMetadata = new ArrayList<>();
     private List<TrackColumn> columns;
+    private List<TrackSort> currentSort;
+    private RowSorter<?> observedSorter;
     private int previewRow = -1;
     private int previewModelColumn = -1;
     private boolean updatingModel;
+    private boolean replacingModel;
 
     public TracksTable(Context context, Consumer<List<SoundFileMetadata>> selectedTracksConsumer) {
         this.settingsService = context.settingsService();
@@ -59,6 +68,7 @@ public class TracksTable extends JTable {
         this.metadataIndexWriterService = context.metadataIndexWriterService();
         this.controller = new TracksTableController(context);
         this.selectedTracksConsumer = selectedTracksConsumer;
+        this.currentSort = List.copyOf(context.settingsService().getSettings().trackSort());
         List<TrackColumn> configuredColumns = context.settingsService().getSettings().trackColumns();
         this.columns = configuredColumns == null || configuredColumns.isEmpty()
                 ? SettingsToPropertiesMapper.DEFAULT_TRACK_COLUMNS
@@ -137,8 +147,15 @@ public class TracksTable extends JTable {
                     .toArray());
         }
 
-        setModel(model);
-        applyColumnWidths();
+        replacingModel = true;
+        try {
+            setModel(model);
+            applyColumnWidths();
+            applyCurrentSort();
+            installSortListener();
+        } finally {
+            replacingModel = false;
+        }
         repaint();
     }
 
@@ -154,6 +171,15 @@ public class TracksTable extends JTable {
 
                 Tag tag = columns.get(column).tag();
                 return tag != Tag.RATING && metadataWriterService.canWrite(tag);
+            }
+
+            @Override
+            public Class<?> getColumnClass(int column) {
+                if (column < 0 || column >= columns.size()) {
+                    return Object.class;
+                }
+
+                return columns.get(column).tag().isNumeric() ? Integer.class : Object.class;
             }
 
             @Override
@@ -350,6 +376,91 @@ public class TracksTable extends JTable {
         }
     }
 
+    List<TrackSort> getCurrentSort() {
+        return List.copyOf(currentSort);
+    }
+
+    private void applyCurrentSort() {
+        RowSorter<?> sorter = getRowSorter();
+        if (sorter == null) {
+            return;
+        }
+
+        sorter.setSortKeys(currentSort.stream()
+                .map(this::toSortKey)
+                .filter(Objects::nonNull)
+                .toList());
+    }
+
+    private RowSorter.SortKey toSortKey(TrackSort sort) {
+        int columnIndex = columnIndex(sort.tag());
+        if (columnIndex < 0) {
+            return null;
+        }
+
+        return new RowSorter.SortKey(columnIndex, toSortOrder(sort.direction()));
+    }
+
+    private int columnIndex(Tag tag) {
+        for (int i = 0; i < columns.size(); i++) {
+            if (columns.get(i).tag() == tag) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private SortOrder toSortOrder(TrackSortDirection direction) {
+        return direction == TrackSortDirection.DESCENDING ? SortOrder.DESCENDING : SortOrder.ASCENDING;
+    }
+
+    private void installSortListener() {
+        RowSorter<?> sorter = getRowSorter();
+        if (observedSorter == sorter) {
+            return;
+        }
+        if (observedSorter != null) {
+            observedSorter.removeRowSorterListener(sortListener);
+        }
+        observedSorter = sorter;
+        if (observedSorter != null) {
+            observedSorter.addRowSorterListener(sortListener);
+        }
+    }
+
+    private void rememberCurrentSort() {
+        if (replacingModel) {
+            return;
+        }
+
+        RowSorter<?> sorter = getRowSorter();
+        if (sorter == null) {
+            currentSort = List.of();
+            return;
+        }
+
+        currentSort = sorter.getSortKeys().stream()
+                .filter(key -> key.getSortOrder() == SortOrder.ASCENDING || key.getSortOrder() == SortOrder.DESCENDING)
+                .map(this::toTrackSort)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    private TrackSort toTrackSort(RowSorter.SortKey key) {
+        int column = key.getColumn();
+        if (column < 0 || column >= columns.size()) {
+            return null;
+        }
+
+        return new TrackSort(columns.get(column).tag(), toTrackSortDirection(key.getSortOrder()));
+    }
+
+    private TrackSortDirection toTrackSortDirection(SortOrder sortOrder) {
+        return sortOrder == SortOrder.DESCENDING
+                ? TrackSortDirection.DESCENDING
+                : TrackSortDirection.ASCENDING;
+    }
+
     private class RatingMouseListener extends MouseAdapter {
         @Override
         public void mouseMoved(MouseEvent event) {
@@ -540,9 +651,12 @@ public class TracksTable extends JTable {
                 settings.maximizedWindow(),
                 settings.lastTreePosition(),
                 settings.lastPlaylist(),
+                settings.lastPlaylistPosition(),
                 settings.indexedPaths(),
                 settings.lastChoosenPath(),
-                currentColumns);
+                currentColumns,
+                settings.trackSort(),
+                settings.lastTracksFilterTag());
         try {
             settingsService.saveSettings(newSettings);
         } catch (IOException e) {

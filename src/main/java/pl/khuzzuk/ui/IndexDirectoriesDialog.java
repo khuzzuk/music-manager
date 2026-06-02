@@ -100,9 +100,12 @@ public class IndexDirectoriesDialog extends JDialog {
                     settings.maximizedWindow(),
                     settings.lastTreePosition(),
                     settings.lastPlaylist(),
+                    settings.lastPlaylistPosition(),
                     indexedPaths,
                     selectedPath,
-                    settings.trackColumns());
+                    settings.trackColumns(),
+                    settings.trackSort(),
+                    settings.lastTracksFilterTag());
 
             try {
                 settingsService.saveSettings(newSettings);

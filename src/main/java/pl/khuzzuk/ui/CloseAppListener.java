@@ -29,11 +29,14 @@ public class CloseAppListener extends WindowAdapter {
                 bounds.width,
                 bounds.height,
                 oldSettings.maximizedWindow(),
-                oldSettings.lastTreePosition(),
-                oldSettings.lastPlaylist(),
+                mainWindow.getCurrentTreePosition(),
+                mainWindow.getCurrentPlaylist(),
+                mainWindow.getCurrentPlaylistPosition(),
                 oldSettings.indexedPaths(),
                 oldSettings.lastChoosenPath(),
-                oldSettings.trackColumns());
+                oldSettings.trackColumns(),
+                mainWindow.getCurrentTracksSort(),
+                mainWindow.getLastTracksFilterTag());
         try {
             settingsService.saveSettings(newSettings);
         } catch (IOException ex) {

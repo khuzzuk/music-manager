@@ -1,8 +1,10 @@
 package pl.khuzzuk.ui;
 
+import pl.khuzzuk.Context;
 import pl.khuzzuk.metadata.SoundFileMetadata;
 import pl.khuzzuk.player.PlaylistSoundFile;
 import pl.khuzzuk.player.SoundFile;
+import pl.khuzzuk.settings.Settings;
 
 import javax.swing.AbstractAction;
 import javax.swing.JTable;
@@ -13,18 +15,20 @@ import javax.swing.table.AbstractTableModel;
 import javax.swing.table.TableColumnModel;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
 public class PlaylistPane extends JScrollPane {
     private static final String REMOVE_SELECTED_ACTION = "removeSelected";
     private final PlaylistTableModel playlistModel = new PlaylistTableModel();
+    private final PlaylistMapper playlistMapper = new PlaylistMapper();
     private final JTable playlist;
     private PlaylistSoundFile first;
     private PlaylistSoundFile last;
     private PlaylistSoundFile currentPlaying;
 
-    public PlaylistPane() {
+    public PlaylistPane(Context context) {
         super();
         PlaylistPaneModeler modeler = new PlaylistPaneModeler();
         modeler.modelPane(this);
@@ -35,12 +39,32 @@ public class PlaylistPane extends JScrollPane {
         configureColumns();
         registerRemoveSelectedAction();
         setViewportView(playlist);
+        restorePlaylist(context.settingsService().getSettings());
     }
 
     public void addTracks(List<SoundFileMetadata> tracks) {
         for (SoundFileMetadata track : tracks) {
             append(new PlaylistSoundFile(new SoundFile(track.path().toString(), title(track))));
         }
+    }
+
+    String getPlaylistPaths() {
+        return playlistMapper.toSettingsValue(soundFiles());
+    }
+
+    int getCurrentPosition() {
+        int position = 0;
+        PlaylistSoundFile current = first;
+        while (current != null) {
+            if (current == currentPlaying) {
+                return position;
+            }
+
+            current = current.next();
+            position++;
+        }
+
+        return -1;
     }
 
     private void append(PlaylistSoundFile playlistSoundFile) {
@@ -58,6 +82,30 @@ public class PlaylistPane extends JScrollPane {
             currentPlaying = playlistSoundFile;
         }
         playlistModel.fireTableRowsInserted(row, row);
+    }
+
+    private void restorePlaylist(Settings settings) {
+        List<SoundFile> soundFiles = playlistMapper.toSoundFiles(settings.lastPlaylist());
+        for (SoundFile soundFile : soundFiles) {
+            append(new PlaylistSoundFile(soundFile));
+        }
+
+        currentPlaying = playlistModel.getAt(settings.lastPlaylistPosition());
+        if (currentPlaying == null) {
+            currentPlaying = first;
+        }
+        playlistModel.fireTableDataChanged();
+    }
+
+    private List<SoundFile> soundFiles() {
+        List<SoundFile> soundFiles = new ArrayList<>();
+        PlaylistSoundFile current = first;
+        while (current != null) {
+            soundFiles.add(current.soundFile());
+            current = current.next();
+        }
+
+        return soundFiles;
     }
 
     public SoundFile getCurrentSoundFile() {
@@ -86,9 +134,9 @@ public class PlaylistPane extends JScrollPane {
 
     private void configureColumns() {
         TableColumnModel columnModel = playlist.getColumnModel();
-        columnModel.getColumn(0).setMinWidth(24);
-        columnModel.getColumn(0).setMaxWidth(24);
-        columnModel.getColumn(0).setPreferredWidth(24);
+        columnModel.getColumn(0).setMinWidth(38);
+        columnModel.getColumn(0).setMaxWidth(38);
+        columnModel.getColumn(0).setPreferredWidth(38);
         columnModel.getColumn(1).setMinWidth(38);
         columnModel.getColumn(1).setMaxWidth(48);
         columnModel.getColumn(1).setPreferredWidth(38);

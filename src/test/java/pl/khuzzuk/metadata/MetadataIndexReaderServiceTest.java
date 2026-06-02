@@ -94,4 +94,47 @@ class MetadataIndexReaderServiceTest {
 
         assertEquals(List.of("Bluegrass"), suggestions);
     }
+
+    @Test
+    void readsUniqueValuesForTag() throws IOException {
+        Path indexPath = tempDir.resolve("metadata-index");
+        Path firstSong = Files.createFile(tempDir.resolve("first.mp3"));
+        Path secondSong = Files.createFile(tempDir.resolve("second.mp3"));
+        Path thirdSong = Files.createFile(tempDir.resolve("third.mp3"));
+        DocumentMapper documentMapper = new DocumentMapper();
+        MetadataIndexWriterService writerService = new MetadataIndexWriterService(indexPath, documentMapper);
+        MetadataIndexReaderService readerService = new MetadataIndexReaderService(indexPath, documentMapper);
+        SoundFileMetadata firstMetadata = SoundFileMetadata.empty(firstSong);
+        firstMetadata.setMood("Noble");
+        SoundFileMetadata secondMetadata = SoundFileMetadata.empty(secondSong);
+        secondMetadata.setMood("Tense");
+        SoundFileMetadata thirdMetadata = SoundFileMetadata.empty(thirdSong);
+        thirdMetadata.setMood("Noble");
+
+        writerService.writeMetadata(List.of(firstMetadata, secondMetadata, thirdMetadata));
+
+        List<String> values = readerService.readValues(Tag.MOOD);
+
+        assertEquals(List.of("Noble", "Tense"), values);
+    }
+
+    @Test
+    void readsPathsMatchingSelectedValues() throws IOException {
+        Path indexPath = tempDir.resolve("metadata-index");
+        Path firstSong = Files.createFile(tempDir.resolve("first.mp3"));
+        Path secondSong = Files.createFile(tempDir.resolve("second.mp3"));
+        DocumentMapper documentMapper = new DocumentMapper();
+        MetadataIndexWriterService writerService = new MetadataIndexWriterService(indexPath, documentMapper);
+        MetadataIndexReaderService readerService = new MetadataIndexReaderService(indexPath, documentMapper);
+        SoundFileMetadata firstMetadata = SoundFileMetadata.empty(firstSong);
+        firstMetadata.setOccasion("Ceremony");
+        SoundFileMetadata secondMetadata = SoundFileMetadata.empty(secondSong);
+        secondMetadata.setOccasion("Battle");
+
+        writerService.writeMetadata(List.of(firstMetadata, secondMetadata));
+
+        List<Path> paths = readerService.readPaths(Tag.OCCASION, List.of("Ceremony"));
+
+        assertEquals(List.of(firstSong.toAbsolutePath().normalize()), paths);
+    }
 }

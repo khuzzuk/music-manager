@@ -27,9 +27,12 @@ public class SettingsToPropertiesMapper {
     private static final String WINDOW_MAXIMIZE_PROPERTY = "window.maximize";
     private static final String LAST_TREE_POSITION_PROPERTY = "last.tree.position";
     private static final String LAST_PLAYLIST_PROPERTY = "last.playlist";
+    private static final String LAST_PLAYLIST_POSITION_PROPERTY = "last.playlist.position";
     private static final String INDEXED_PATHS_PROPERTY = "indexed.paths";
     private static final String LAST_CHOOSEN_PATH_PROPERTY = "last.choosen.path";
     private static final String TRACK_COLUMNS_PROPERTY = "track.columns";
+    private static final String TRACK_SORT_PROPERTY = "track.sort";
+    private static final String LAST_TRACKS_FILTER_TAG_PROPERTY = "last.tracks.filter.tag";
 
     public Settings toSettings(Properties prop) {
         return new Settings(
@@ -40,9 +43,12 @@ public class SettingsToPropertiesMapper {
                 getBoolean(prop.getProperty(WINDOW_MAXIMIZE_PROPERTY)),
                 prop.getProperty(LAST_TREE_POSITION_PROPERTY, ""),
                 prop.getProperty(LAST_PLAYLIST_PROPERTY, ""),
+                getInt(prop.getProperty(LAST_PLAYLIST_POSITION_PROPERTY), -1),
                 getPaths(prop),
                 Path.of(prop.getProperty(LAST_CHOOSEN_PATH_PROPERTY, "")),
-                getTrackColumns(prop)
+                getTrackColumns(prop),
+                getTrackSort(prop),
+                getTag(prop.getProperty(LAST_TRACKS_FILTER_TAG_PROPERTY))
         );
     }
 
@@ -55,6 +61,7 @@ public class SettingsToPropertiesMapper {
         prop.setProperty(WINDOW_MAXIMIZE_PROPERTY, Boolean.toString(settings.maximizedWindow()));
         prop.setProperty(LAST_TREE_POSITION_PROPERTY, settings.lastTreePosition());
         prop.setProperty(LAST_PLAYLIST_PROPERTY, settings.lastPlaylist());
+        prop.setProperty(LAST_PLAYLIST_POSITION_PROPERTY, Integer.toString(settings.lastPlaylistPosition()));
         prop.setProperty(INDEXED_PATHS_PROPERTY, settings.indexedPaths().stream()
                 .map(Path::toString)
                 .collect(Collectors.joining(File.pathSeparator)));
@@ -62,6 +69,10 @@ public class SettingsToPropertiesMapper {
         prop.setProperty(TRACK_COLUMNS_PROPERTY, settings.trackColumns().stream()
                 .map(column -> column.tag().settingsName() + ":" + column.width())
                 .collect(Collectors.joining(";")));
+        prop.setProperty(TRACK_SORT_PROPERTY, settings.trackSort().stream()
+                .map(sort -> sort.tag().settingsName() + ":" + sort.direction().name().toLowerCase())
+                .collect(Collectors.joining(";")));
+        prop.setProperty(LAST_TRACKS_FILTER_TAG_PROPERTY, settings.lastTracksFilterTag().settingsName());
         return prop;
     }
 
@@ -105,6 +116,42 @@ public class SettingsToPropertiesMapper {
         Tag tag = Tag.fromSettingsName(parts[0]);
         int width = parts.length == 2 ? getInt(parts[1].trim(), 120) : 120;
         return new TrackColumn(tag, width);
+    }
+
+    private static List<TrackSort> getTrackSort(Properties prop) {
+        String sort = prop.getProperty(TRACK_SORT_PROPERTY, "");
+        if (sort.isBlank()) {
+            return List.of();
+        }
+
+        return Arrays.stream(sort.split(";"))
+                .map(SettingsToPropertiesMapper::toTrackSort)
+                .filter(trackSort -> trackSort.tag() != null && trackSort.direction() != null)
+                .toList();
+    }
+
+    private static TrackSort toTrackSort(String value) {
+        String[] parts = value.split(":", 2);
+        Tag tag = Tag.fromSettingsName(parts[0]);
+        TrackSortDirection direction = parts.length == 2 ? toTrackSortDirection(parts[1]) : null;
+        return new TrackSort(tag, direction);
+    }
+
+    private static TrackSortDirection toTrackSortDirection(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        return switch (value.trim().toLowerCase()) {
+            case "ascending", "asc" -> TrackSortDirection.ASCENDING;
+            case "descending", "desc" -> TrackSortDirection.DESCENDING;
+            default -> null;
+        };
+    }
+
+    private static Tag getTag(String value) {
+        Tag tag = Tag.fromSettingsName(value);
+        return tag == null ? Tag.MOOD : tag;
     }
 
     private static int getInt(String prop, int defaultValue) {

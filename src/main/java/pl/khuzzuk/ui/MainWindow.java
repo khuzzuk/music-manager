@@ -1,8 +1,10 @@
 package pl.khuzzuk.ui;
 
 import pl.khuzzuk.Context;
+import pl.khuzzuk.metadata.Tag;
 import pl.khuzzuk.settings.Settings;
 import pl.khuzzuk.settings.SettingsService;
+import pl.khuzzuk.settings.TrackSort;
 
 import javax.swing.AbstractAction;
 import javax.swing.JComponent;
@@ -13,10 +15,13 @@ import java.awt.BorderLayout;
 import java.awt.KeyboardFocusManager;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
+import java.util.List;
 
 public class MainWindow extends JFrame {
     private static final String PLAY_PAUSE_ACTION = "playPause";
     SettingsService settingsService;
+    private final ContentPane contentPane;
+    private final PlaylistPane playlistPane;
 
     public MainWindow(Context context) {
         super("Music Manager");
@@ -28,9 +33,9 @@ public class MainWindow extends JFrame {
         setBounds(settings.windowX(),  settings.windowY(), settings.windowWidth(), settings.windowHeight());
 
         setLayout(new BorderLayout(5, 5));
-        PlaylistPane playlistPane = new PlaylistPane();
+        playlistPane = new PlaylistPane(context);
         PlayerController playerController = new PlayerController(context.soundPlayer(), playlistPane);
-        ContentPane contentPane = new ContentPane(context, playlistPane);
+        contentPane = new ContentPane(context, playlistPane);
         add(contentPane, BorderLayout.CENTER);
         PlayerPane playerPane = new PlayerPane(playerController);
         JPanel playerPaneContainer = new JPanel(new BorderLayout());
@@ -44,6 +49,26 @@ public class MainWindow extends JFrame {
 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         addWindowListener(new CloseAppListener(this, context));
+    }
+
+    Tag getLastTracksFilterTag() {
+        return contentPane == null ? Tag.MOOD : contentPane.getSelectedFilterTag();
+    }
+
+    List<TrackSort> getCurrentTracksSort() {
+        return contentPane == null ? List.of() : contentPane.getCurrentTracksSort();
+    }
+
+    String getCurrentTreePosition() {
+        return contentPane == null ? "" : contentPane.getCurrentTreePosition();
+    }
+
+    String getCurrentPlaylist() {
+        return playlistPane == null ? "" : playlistPane.getPlaylistPaths();
+    }
+
+    int getCurrentPlaylistPosition() {
+        return playlistPane == null ? -1 : playlistPane.getCurrentPosition();
     }
 
     private void registerPlayPauseAction(PlayerPane playerPane) {

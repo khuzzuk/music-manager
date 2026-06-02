@@ -1,10 +1,15 @@
 package pl.khuzzuk.ui;
 
 import pl.khuzzuk.Context;
+import pl.khuzzuk.index.SoundFileIndexItem;
 import pl.khuzzuk.index.IndexProgress;
 import pl.khuzzuk.index.IndexItem;
+import pl.khuzzuk.logging.ErrorReporter;
+import pl.khuzzuk.metadata.Tag;
+import pl.khuzzuk.settings.TrackSort;
 
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
@@ -12,7 +17,11 @@ import javax.swing.SwingUtilities;
 import java.awt.CardLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class ContentPane extends JPanel {
     private static final String TRACKS_CARD = "tracks";
@@ -22,10 +31,19 @@ public class ContentPane extends JPanel {
     private final JPanel tracksArea = new JPanel(tracksCardLayout);
     private final TracksTable tracksTable;
     private final ProgressPanel progressPanel = new ProgressPanel();
+    private final Context context;
+    private final FileTree fileTree;
+    private TracksFilter.Selection filterSelection;
+    private List<IndexItem> selectedTreeFiles = List.of();
+    private boolean treeSelectionActive;
     private boolean indexing;
 
     public ContentPane(Context context, PlaylistPane playlist) {
         super(new GridBagLayout());
+        this.context = context;
+        this.filterSelection = new TracksFilter.Selection(
+                context.settingsService().getSettings().lastTracksFilterTag(),
+                List.of());
         ContentPaneModeler modeler = new ContentPaneModeler();
         modeler.modelPane(this);
 
@@ -38,7 +56,9 @@ public class ContentPane extends JPanel {
         context.indexService().addProgressListener(progress ->
                 SwingUtilities.invokeLater(() -> showIndexingProgress(progress)));
 
-        FileTree fileTree = new FileTree(context, this::showMappedFiles);
+        fileTree = new FileTree(context, this::showSelectedTreeFiles);
+        TracksFilter tracksFilter = new TracksFilter(context, this::showFilteredFiles);
+        JPanel fileBrowserPane = createFileBrowserPane(fileTree, tracksFilter, modeler);
 
         GridBagConstraints c = new GridBagConstraints();
         c.fill = GridBagConstraints.BOTH;
@@ -48,16 +68,95 @@ public class ContentPane extends JPanel {
 
         c.gridx = 0;
         c.weightx = 0.2;
-        add(fileTree, c);
+        add(fileBrowserPane, c);
         c.gridx = 1;
         c.weightx = 0.6;
         add(tracksArea, c);
         c.gridx = 2;
         c.weightx = 0.2;
         add(playlist, c);
+
     }
 
-    private void showMappedFiles(List<IndexItem> files) {
+    Tag getSelectedFilterTag() {
+        return filterSelection.tag();
+    }
+
+    List<TrackSort> getCurrentTracksSort() {
+        return tracksTable.getCurrentSort();
+    }
+
+    String getCurrentTreePosition() {
+        return fileTree.getCurrentPosition();
+    }
+
+    private JPanel createFileBrowserPane(FileTree fileTree, TracksFilter tracksFilter, ContentPaneModeler modeler) {
+        JPanel fileBrowserPane = new JPanel(new GridBagLayout());
+        modeler.modelFileBrowserPane(fileBrowserPane);
+
+        GridBagConstraints c = new GridBagConstraints();
+        c.gridx = 0;
+        c.gridy = 0;
+        c.fill = GridBagConstraints.BOTH;
+        c.weightx = 1.0;
+        c.weighty = 0.65;
+        c.insets = modeler.fileTreeInsets();
+        fileBrowserPane.add(fileTree, c);
+
+        c.gridy = 1;
+        c.weighty = 0.35;
+        c.insets = modeler.tracksFilterInsets();
+        fileBrowserPane.add(tracksFilter, c);
+        return fileBrowserPane;
+    }
+
+    private void showSelectedTreeFiles(List<IndexItem> files) {
+        treeSelectionActive = true;
+        selectedTreeFiles = files == null ? List.of() : List.copyOf(files);
+        loadTrackFiles(resolveFilteredFiles());
+    }
+
+    private void showFilteredFiles(TracksFilter.Selection selection) {
+        filterSelection = selection;
+        loadTrackFiles(resolveFilteredFiles());
+    }
+
+    private List<IndexItem> resolveFilteredFiles() {
+        if (filterSelection.values().isEmpty()) {
+            return treeSelectionActive ? selectedTreeFiles : readLuceneFiles(filterSelection.tag(), List.of());
+        }
+
+        List<IndexItem> luceneFiles = readLuceneFiles(filterSelection.tag(), filterSelection.values());
+        if (!treeSelectionActive) {
+            return luceneFiles;
+        }
+
+        Set<Path> lucenePaths = luceneFiles.stream()
+                .map(IndexItem::getPath)
+                .collect(Collectors.toSet());
+        return selectedTreeFiles.stream()
+                .filter(file -> lucenePaths.contains(file.getPath()))
+                .toList();
+    }
+
+    private List<IndexItem> readLuceneFiles(Tag tag, List<String> values) {
+        try {
+            return context.metadataIndexReaderService().readPaths(tag, values).stream()
+                    .map(SoundFileIndexItem::new)
+                    .map(IndexItem.class::cast)
+                    .toList();
+        } catch (IOException | SecurityException e) {
+            ErrorReporter.log("Cannot read tracks filter paths.", e);
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Nie udalo sie wczytac plikow z indeksu metadanych.",
+                    "Blad odczytu",
+                    JOptionPane.ERROR_MESSAGE);
+            return List.of();
+        }
+    }
+
+    private void loadTrackFiles(List<IndexItem> files) {
         if (files == null || files.isEmpty()) {
             tracksTable.showMappedFiles(files);
             showTracks();

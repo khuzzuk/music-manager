@@ -25,7 +25,7 @@ class SettingsToPropertiesMapperTest {
                         new TrackColumn(Tag.DURATION, 80),
                         new TrackColumn(Tag.COMPOSER, 160),
                         new TrackColumn(Tag.MOOD, 120),
-                        new TrackColumn(Tag.MOVEMENT, 120),
+                        new TrackColumn(Tag.TEMPO, 120),
                         new TrackColumn(Tag.OCCASION, 120)),
                 settings.trackColumns());
     }
@@ -47,12 +47,73 @@ class SettingsToPropertiesMapperTest {
                 false,
                 "",
                 "",
+                2,
                 List.of(),
                 null,
-                List.of(new TrackColumn(Tag.MOOD, 140), new TrackColumn(Tag.OCCASION, 160)));
+                List.of(new TrackColumn(Tag.MOOD, 140), new TrackColumn(Tag.OCCASION, 160)),
+                List.of(new TrackSort(Tag.RATING, TrackSortDirection.DESCENDING)),
+                Tag.COMPOSER);
 
         Properties properties = new SettingsToPropertiesMapper().toProperties(settings);
 
         assertEquals("mood:140;occasion:160", properties.getProperty("track.columns"));
+        assertEquals("rating:descending", properties.getProperty("track.sort"));
+        assertEquals("composer", properties.getProperty("last.tracks.filter.tag"));
+        assertEquals("2", properties.getProperty("last.playlist.position"));
+    }
+
+    @Test
+    void readsLastTracksFilterTagFromSettingsProperties() {
+        Properties properties = new Properties();
+        properties.setProperty("last.tracks.filter.tag", "albumArtist");
+
+        Settings settings = new SettingsToPropertiesMapper().toSettings(properties);
+
+        assertEquals(Tag.ALBUM_ARTIST, settings.lastTracksFilterTag());
+    }
+
+    @Test
+    void usesMoodAsDefaultTracksFilterTag() {
+        Settings settings = new SettingsToPropertiesMapper().toSettings(new Properties());
+
+        assertEquals(Tag.MOOD, settings.lastTracksFilterTag());
+    }
+
+    @Test
+    void readsLastPlaylistPositionFromSettingsProperties() {
+        Properties properties = new Properties();
+        properties.setProperty("last.playlist.position", "3");
+
+        Settings settings = new SettingsToPropertiesMapper().toSettings(properties);
+
+        assertEquals(3, settings.lastPlaylistPosition());
+    }
+
+    @Test
+    void usesMinusOneAsDefaultPlaylistPosition() {
+        Settings settings = new SettingsToPropertiesMapper().toSettings(new Properties());
+
+        assertEquals(-1, settings.lastPlaylistPosition());
+    }
+
+    @Test
+    void readsTrackSortFromSettingsProperties() {
+        Properties properties = new Properties();
+        properties.setProperty("track.sort", "title:ascending;rating:descending;unknown:ascending;album:invalid");
+
+        Settings settings = new SettingsToPropertiesMapper().toSettings(properties);
+
+        assertEquals(
+                List.of(
+                        new TrackSort(Tag.TITLE, TrackSortDirection.ASCENDING),
+                        new TrackSort(Tag.RATING, TrackSortDirection.DESCENDING)),
+                settings.trackSort());
+    }
+
+    @Test
+    void usesEmptyTrackSortWhenPropertyIsMissing() {
+        Settings settings = new SettingsToPropertiesMapper().toSettings(new Properties());
+
+        assertEquals(List.of(), settings.trackSort());
     }
 }

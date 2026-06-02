@@ -14,7 +14,7 @@ import java.awt.geom.Path2D;
 public class RatingIcon implements Icon {
     private static final int MAX_RATING = 10;
     private static final int STAR_COUNT = 5;
-    private static final int STAR_SIZE = 14;
+    private static final int STAR_SIZE = 20;
     private static final int STAR_GAP = 2;
     private final int rating;
 

@@ -17,12 +17,25 @@ class ContentPaneModeler {
         tracksArea.setBorder(UiTheme.lineBorder());
     }
 
+    void modelFileBrowserPane(JPanel fileBrowserPane) {
+        fileBrowserPane.setOpaque(false);
+        fileBrowserPane.setBackground(UiTheme.BACKGROUND);
+    }
+
     void modelScrollPane(JScrollPane scrollPane) {
         UiTheme.modelScrollPane(scrollPane);
     }
 
     Insets contentInsets() {
         return new Insets(0, 4, 0, 4);
+    }
+
+    Insets fileTreeInsets() {
+        return new Insets(0, 0, 4, 0);
+    }
+
+    Insets tracksFilterInsets() {
+        return new Insets(4, 0, 0, 0);
     }
 
     Insets progressLabelInsets() {

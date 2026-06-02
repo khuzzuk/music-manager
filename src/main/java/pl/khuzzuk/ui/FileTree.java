@@ -5,6 +5,7 @@ import pl.khuzzuk.index.IndexItem;
 import pl.khuzzuk.index.IndexService;
 import pl.khuzzuk.index.RootIndexItem;
 import pl.khuzzuk.logging.ErrorReporter;
+import pl.khuzzuk.settings.SettingsService;
 
 import javax.swing.AbstractAction;
 import javax.swing.Action;
@@ -23,19 +24,23 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
 public class FileTree extends JTree {
+    private static final String ROOT_POSITION = "<root>";
     private static final String REINDEX_SELECTED_DIRECTORY_ACTION = "reindexSelectedDirectory";
     private static final String REINDEX_SELECTED_DIRECTORY_CHANGES_ACTION = "reindexSelectedDirectoryChanges";
+    private final SettingsService settingsService;
     private final IndexService indexService;
     private final Consumer<List<IndexItem>> selectedFilesConsumer;
     private final FileTreeModeler modeler = new FileTreeModeler();
 
     public FileTree(Context context, Consumer<List<IndexItem>> selectedFilesConsumer) {
         super(createRoot(context.indexReaderService().getCurrentRootIndexItem()));
+        this.settingsService = context.settingsService();
         this.indexService = context.indexService();
         this.selectedFilesConsumer = selectedFilesConsumer;
         setToggleClickCount(1);
@@ -46,6 +51,7 @@ public class FileTree extends JTree {
         registerReindexSelectedDirectoryAction();
         this.indexService.addIndexListener(root -> SwingUtilities.invokeLater(() -> refresh(root)));
         expandRow(0);
+        restoreInitialSelection();
     }
 
     @Override
@@ -148,6 +154,10 @@ public class FileTree extends JTree {
         return selectionPath == null ? null : getIndexItem(selectionPath);
     }
 
+    String getCurrentPosition() {
+        return toPosition(getSelectedIndexItem());
+    }
+
     private IndexItem getIndexItem(TreePath path) {
         Object lastPathComponent = path.getLastPathComponent();
         if (!(lastPathComponent instanceof DefaultMutableTreeNode treeNode)
@@ -167,6 +177,39 @@ public class FileTree extends JTree {
         if (selectionPath != null) {
             setSelectionPath(selectionPath);
         }
+    }
+
+    private void restoreInitialSelection() {
+        String lastTreePosition = settingsService.getSettings().lastTreePosition();
+        if (lastTreePosition == null || lastTreePosition.isBlank()) {
+            return;
+        }
+
+        DefaultMutableTreeNode root = (DefaultMutableTreeNode) getModel().getRoot();
+        TreePath selectionPath = findPath(root, lastTreePosition);
+        if (selectionPath == null) {
+            return;
+        }
+
+        setSelectionPath(selectionPath);
+        scrollPathToVisible(selectionPath);
+        notifySelectedFiles(selectionPath);
+    }
+
+    private TreePath findPath(DefaultMutableTreeNode node, String position) {
+        if (node.getUserObject() instanceof FileTreeNode fileTreeNode
+                && position.equals(toPosition(fileTreeNode.indexItem()))) {
+            return new TreePath(node.getPath());
+        }
+
+        for (int i = 0; i < node.getChildCount(); i++) {
+            TreePath path = findPath((DefaultMutableTreeNode) node.getChildAt(i), position);
+            if (path != null) {
+                return path;
+            }
+        }
+
+        return null;
     }
 
     private TreePath findPath(DefaultMutableTreeNode node, IndexItem selectedItem) {
@@ -191,6 +234,18 @@ public class FileTree extends JTree {
         }
 
         return item.getPath() != null && item.getPath().equals(selectedItem.getPath());
+    }
+
+    private String toPosition(IndexItem item) {
+        if (item == null) {
+            return "";
+        }
+        if (item.isRoot()) {
+            return ROOT_POSITION;
+        }
+
+        Path path = item.getPath();
+        return path == null ? "" : path.toAbsolutePath().normalize().toString();
     }
 
     private static DefaultMutableTreeNode createRoot(RootIndexItem rootIndexItem) {

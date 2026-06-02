@@ -13,6 +13,10 @@ The class in this repository is named `SettingsService`, not `SettingService`.
 - `src/main/java/pl/khuzzuk/settings/Settings.java` - immutable settings record.
 - `src/main/java/pl/khuzzuk/settings/TrackColumn.java` - track-table column name
   and width.
+- `src/main/java/pl/khuzzuk/settings/TrackSort.java` - track-table sorted column
+  name and direction.
+- `src/main/java/pl/khuzzuk/settings/TrackSortDirection.java` - track-table sort
+  direction.
 - `src/main/java/pl/khuzzuk/metadata/Tag.java` - supported track-table metadata
   tags, labels, and metadata value providers.
 - `src/main/java/pl/khuzzuk/settings/SettingsToPropertiesMapper.java` - maps
@@ -138,9 +142,12 @@ public record Settings(
         boolean maximizedWindow,
         String lastTreePosition,
         String lastPlaylist,
+        int lastPlaylistPosition,
         List<Path> indexedPaths,
         Path lastChoosenPath,
-        List<TrackColumn> trackColumns) {
+        List<TrackColumn> trackColumns,
+        List<TrackSort> trackSort,
+        Tag lastTracksFilterTag) {
 }
 ```
 
@@ -154,6 +161,9 @@ The compact constructor normalizes nullable path fields:
 - `lastChoosenPath == null` becomes `Path.of("")`.
 - `trackColumns == null` becomes `List.of()`;
 - otherwise `trackColumns` is copied with `List.copyOf(...)`.
+- `trackSort == null` becomes `List.of()`;
+- otherwise `trackSort` is copied with `List.copyOf(...)`.
+- `lastTracksFilterTag == null` becomes `Tag.MOOD`.
 
 ## Property Keys
 
@@ -168,11 +178,21 @@ The mapper uses these keys:
 | `maximizedWindow` | `window.maximize` | `false` |
 | `lastTreePosition` | `last.tree.position` | empty string |
 | `lastPlaylist` | `last.playlist` | empty string |
+| `lastPlaylistPosition` | `last.playlist.position` | `-1` |
 | `indexedPaths` | `indexed.paths` | empty string |
 | `lastChoosenPath` | `last.choosen.path` | empty path |
-| `trackColumns` | `track.columns` | `title:220;duration:80;album:180;composer:160;rating:70;mood:120;movement:120;occasion:120` |
+| `trackColumns` | `track.columns` | `title:220;duration:80;album:180;composer:160;rating:70;mood:120;tempo:120;occasion:120` |
+| `trackSort` | `track.sort` | empty string |
+| `lastTracksFilterTag` | `last.tracks.filter.tag` | `mood` |
 
 `lastChoosenPath` intentionally uses the current field spelling from code.
+`lastTreePosition` stores the last active `FileTree` item. Directory nodes use
+their absolute normalized path; the root node uses `<root>`. An empty value means
+no tree item should be restored and the tracks table should stay empty on startup,
+even when `track.sort` has a saved value.
+`lastPlaylist` stores only sound file paths, joined with `File.pathSeparator`.
+`lastPlaylistPosition` stores the zero-based current playlist item index. `-1`
+means no current playlist item.
 `indexedPaths` is stored as one property joined with `File.pathSeparator`, which is
 the standard Java separator for lists of paths (`;` on Windows, `:` on Unix-like
 systems).
@@ -180,6 +200,11 @@ systems).
 columns are separated with `;`. Column names are stable metadata keys mapped by
 `pl.khuzzuk.metadata.Tag`; UI code should use enum constants such as `RATING`,
 not raw string literals such as `"rating"`.
+`trackSort` is stored as one property where each sort key is `name:direction` and
+entries are separated with `;`, for example `title:ascending;rating:descending`.
+An empty value means no saved sort should be applied.
+`lastTracksFilterTag` stores the last selected metadata field in `TracksFilter`
+as a `Tag.settingsName()` value.
 
 Example:
 
@@ -187,8 +212,11 @@ Example:
 #Settings
 #Tue May 26 20:58:28 CEST 2026
 indexed.paths=C\:\\Music;D\:\\Archive\\Music
-track.columns=title:220;duration:80;album:180;composer:160;rating:70;mood:120;movement:120;occasion:120
+track.columns=title:220;duration:80;album:180;composer:160;rating:70;mood:120;tempo:120;occasion:120
+track.sort=title:ascending
+last.tracks.filter.tag=mood
 last.playlist=
+last.playlist.position=-1
 last.tree.position=
 last.choosen.path=C\:\\Music
 window.height=1035
@@ -212,11 +240,18 @@ window.y=150
 8. `MainMenuBar` opens `IndexDirectoriesDialog` from the Index menu.
 9. `IndexDirectoriesDialog` lists current `indexedPaths` and lets the user add a
    directory with `JFileChooser` starting from `lastChoosenPath`.
-10. `ContentPane` reads `settings.trackColumns()` and creates `TracksTable` with
-   the configured visible metadata columns and widths.
+10. `ContentPane` reads `settings.trackColumns()` and `settings.trackSort()` and
+   creates `TracksTable` with the configured visible metadata columns, widths, and
+   active table sort. It creates `FileTree`, which restores
+   `settings.lastTreePosition()` when it is not empty and loads files for that
+   tree item. `PlaylistPane` restores `settings.lastPlaylist()` and
+   `settings.lastPlaylistPosition()`. `ContentPane` also reads
+   `settings.lastTracksFilterTag()` to select the initial `TracksFilter` field.
 11. `CloseAppListener.windowClosing(...)` reads the current window `bounds`, combines
-   them with the previous `maximizedWindow`, `lastTreePosition`, `lastPlaylist`,
-   `indexedPaths`, `lastChoosenPath`, and `trackColumns` values, then calls
+   them with the previous `maximizedWindow`, `indexedPaths`,
+   `lastChoosenPath`, and `trackColumns` values, reads the current `FileTree`
+   position, playlist paths, playlist position, track-table sort, and
+   `TracksFilter` field from `MainWindow`, then calls
    `settingsService.saveSettings(newSettings)`.
 
 ## Change Contracts
@@ -286,7 +321,8 @@ overwrites the file, and updates `this.settings` after a successful write.
 
 `Settings` is a record:
 windowX, windowY, windowWidth, windowHeight, maximizedWindow, lastTreePosition,
-lastPlaylist, indexedPaths, lastChoosenPath, trackColumns.
+lastPlaylist, lastPlaylistPosition, indexedPaths, lastChoosenPath, trackColumns,
+trackSort, lastTracksFilterTag.
 
 Mapper keys:
 window.x=windowX default 100
@@ -296,10 +332,13 @@ window.height=windowHeight default 400
 window.maximize=maximizedWindow default false
 last.tree.position=lastTreePosition default ""
 last.playlist=lastPlaylist default ""
+last.playlist.position=lastPlaylistPosition default -1
 indexed.paths=indexedPaths joined with File.pathSeparator default ""
 last.choosen.path=lastChoosenPath default empty path
 track.columns=trackColumns formatted as name:width entries joined with ; default
-title:220;duration:80;album:180;composer:160;rating:70;mood:120;movement:120;occasion:120
+title:220;duration:80;album:180;composer:160;rating:70;mood:120;tempo:120;occasion:120
+track.sort=trackSort formatted as name:direction entries joined with ; default ""
+last.tracks.filter.tag=lastTracksFilterTag settingsName default mood
 
 Integration:
 MusicManager creates SettingsService and stores it in Context.
@@ -307,8 +346,14 @@ MainWindow reads settings and applies window bounds.
 MainMenuBar receives Context in its constructor and opens
 IndexDirectoriesDialog. IndexDirectoriesDialog shows indexedPaths and adds
 directories through JFileChooser starting from lastChoosenPath.
-ContentPane uses Settings.trackColumns() to configure TracksTable columns.
-CloseAppListener saves bounds when the application closes.
+ContentPane uses Settings.trackColumns() and Settings.trackSort() to configure
+TracksTable columns and sorting. FileTree restores Settings.lastTreePosition()
+when it is not empty; otherwise the tracks table stays empty on startup.
+PlaylistPane restores Settings.lastPlaylist() and Settings.lastPlaylistPosition().
+Settings.lastTracksFilterTag() initializes TracksFilter.
+CloseAppListener saves bounds, current FileTree position, current playlist paths,
+current playlist position, and current track-table sort when the application
+closes.
 
 When adding a settings field, change Settings, SettingsToPropertiesMapper, places
 that call `new Settings(...)`, and this documentation together.

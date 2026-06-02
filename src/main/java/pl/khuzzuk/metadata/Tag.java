@@ -56,7 +56,7 @@ public enum Tag {
 
         String normalizedName = settingsName.trim().toLowerCase(Locale.ROOT);
         for (Tag tag : values()) {
-            if (tag.settingsName.equals(normalizedName)) {
+            if (tag.settingsName.toLowerCase(Locale.ROOT).equals(normalizedName)) {
                 return tag;
             }
         }
