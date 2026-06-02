@@ -1,8 +1,9 @@
 package pl.khuzzuk.ui.icons;
 
+import pl.khuzzuk.ui.UiTheme;
+
 import javax.swing.Icon;
 import java.awt.BasicStroke;
-import java.awt.Color;
 import java.awt.Component;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -15,8 +16,6 @@ public class RatingIcon implements Icon {
     private static final int STAR_COUNT = 5;
     private static final int STAR_SIZE = 14;
     private static final int STAR_GAP = 2;
-    private static final Color FILLED_COLOR = new Color(245, 174, 35);
-    private static final Color EMPTY_COLOR = new Color(185, 185, 185);
     private final int rating;
 
     public RatingIcon(int rating) {
@@ -50,7 +49,7 @@ public class RatingIcon implements Icon {
 
     private void paintStar(Graphics2D g, int x, int y, int starRating) {
         Shape star = createStar(x + STAR_SIZE / 2.0, y + STAR_SIZE / 2.0);
-        g.setColor(EMPTY_COLOR);
+        g.setColor(UiTheme.RATING_EMPTY);
         g.draw(star);
 
         if (starRating <= 0) {
@@ -62,14 +61,14 @@ public class RatingIcon implements Icon {
             g.clipRect(x, y, STAR_SIZE / 2, STAR_SIZE);
         }
 
-        g.setColor(FILLED_COLOR);
+        g.setColor(UiTheme.SELECTION_STRONG);
         g.fill(star);
-        g.setColor(FILLED_COLOR.darker());
+        g.setColor(UiTheme.ACCENT_DARK);
         g.draw(star);
 
         if (starRating == 1) {
             g.setClip(previousClip);
-            g.setColor(EMPTY_COLOR);
+            g.setColor(UiTheme.RATING_EMPTY);
             g.draw(star);
         }
     }

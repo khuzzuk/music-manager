@@ -34,6 +34,7 @@ public class FLACPlayer implements SoundPlayer {
     private long playbackStartNanos;
     private boolean paused;
     private boolean stopped = true;
+    private int volumePercent = 100;
 
     @Override
     public void play(SoundFile soundFile) {
@@ -124,6 +125,14 @@ public class FLACPlayer implements SoundPlayer {
         }
     }
 
+    @Override
+    public void setVolumePercent(int volumePercent) {
+        synchronized (lock) {
+            this.volumePercent = Math.clamp(volumePercent, 0, 100);
+            AudioLineVolume.setVolumePercent(currentLine, this.volumePercent);
+        }
+    }
+
     private void start(SoundFile soundFile, FlacInfo flacInfo, int positionMillis) {
         long session;
         int boundedPositionMillis = Math.clamp(positionMillis, 0, flacInfo.durationMillis());
@@ -154,6 +163,7 @@ public class FLACPlayer implements SoundPlayer {
                     return;
                 }
 
+                AudioLineVolume.setVolumePercent(line, volumePercent);
                 currentStream = stream;
                 currentLine = line;
             }

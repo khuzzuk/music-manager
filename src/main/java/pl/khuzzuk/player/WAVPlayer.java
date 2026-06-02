@@ -27,6 +27,7 @@ public class WAVPlayer implements SoundPlayer {
     private long playbackStartNanos;
     private long playbackSession;
     private boolean paused;
+    private int volumePercent = 100;
 
     @Override
     public void play(SoundFile soundFile) {
@@ -121,6 +122,14 @@ public class WAVPlayer implements SoundPlayer {
         }
     }
 
+    @Override
+    public void setVolumePercent(int volumePercent) {
+        synchronized (lock) {
+            this.volumePercent = Math.clamp(volumePercent, 0, 100);
+            AudioLineVolume.setVolumePercent(currentLine, this.volumePercent);
+        }
+    }
+
     private void start(SoundFile soundFile, WavInfo wavInfo, int positionMillis) {
         int boundedPositionMillis = Math.clamp(positionMillis, 0, wavInfo.durationMillis());
         long session;
@@ -147,6 +156,7 @@ public class WAVPlayer implements SoundPlayer {
                     line.close();
                     return;
                 }
+                AudioLineVolume.setVolumePercent(line, volumePercent);
                 currentLine = line;
                 playbackStartNanos = System.nanoTime();
             }

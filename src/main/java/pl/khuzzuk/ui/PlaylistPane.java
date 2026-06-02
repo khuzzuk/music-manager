@@ -26,9 +26,12 @@ public class PlaylistPane extends JScrollPane {
 
     public PlaylistPane() {
         super();
+        PlaylistPaneModeler modeler = new PlaylistPaneModeler();
+        modeler.modelPane(this);
         playlist = new JTable(playlistModel);
         playlist.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         playlist.setTableHeader(null);
+        modeler.modelPlaylist(playlist);
         configureColumns();
         registerRemoveSelectedAction();
         setViewportView(playlist);

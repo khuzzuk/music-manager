@@ -66,6 +66,10 @@ public class PlayerController {
         return isPlaying();
     }
 
+    public void setVolumePercent(int volumePercent) {
+        soundPlayer.setVolumePercent(volumePercent);
+    }
+
     public boolean isPlaying() {
         int durationMillis = soundPlayer.getCurrentDurationMillis();
         if (playing && durationMillis > 0 && soundPlayer.getCurrentPositionMillis() >= durationMillis) {

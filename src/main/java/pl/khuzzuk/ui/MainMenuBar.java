@@ -14,8 +14,12 @@ public class MainMenuBar extends JMenuBar {
 
     public MainMenuBar(Context context) {
         this.context = context;
+        MainMenuBarModeler modeler = new MainMenuBarModeler();
+        modeler.modelMenuBar(this);
         JMenu menu = new JMenu("Plik");
+        modeler.modelMenu(menu);
         JMenuItem menuIndexItem = new JMenuItem("Indeks");
+        modeler.modelMenuItem(menuIndexItem);
         menuIndexItem.addActionListener(ignored -> chooseIndexDirectory());
         menu.add(menuIndexItem);
         add(menu);

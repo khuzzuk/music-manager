@@ -5,8 +5,6 @@ import pl.khuzzuk.ui.icons.RatingIcon;
 import javax.swing.JComponent;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
-import java.awt.Cursor;
-import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
@@ -22,10 +20,8 @@ public class RatingEditor extends JComponent {
 
     public RatingEditor(int rating) {
         this.rating = Math.clamp(rating, 0, MAX_RATING);
-        RatingIcon icon = new RatingIcon(MAX_RATING);
-        setPreferredSize(new Dimension(icon.getIconWidth() + PADDING * 2, icon.getIconHeight() + PADDING * 2));
-        setFocusable(true);
-        setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        RatingEditorModeler modeler = new RatingEditorModeler();
+        modeler.modelEditor(this, MAX_RATING, PADDING);
         MouseHandler mouseHandler = new MouseHandler();
         addMouseListener(mouseHandler);
         addMouseMotionListener(mouseHandler);

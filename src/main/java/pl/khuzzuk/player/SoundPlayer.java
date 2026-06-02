@@ -11,6 +11,8 @@ public interface SoundPlayer {
 
     void seekToMillis(int positionMillis);
 
+    void setVolumePercent(int volumePercent);
+
     int getCurrentPositionMillis();
 
     int getCurrentDurationMillis();

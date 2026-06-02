@@ -5,7 +5,6 @@ import pl.khuzzuk.index.IndexItem;
 import pl.khuzzuk.index.IndexService;
 import pl.khuzzuk.index.RootIndexItem;
 import pl.khuzzuk.logging.ErrorReporter;
-import pl.khuzzuk.ui.icons.TreeToggleIcon;
 
 import javax.swing.AbstractAction;
 import javax.swing.Action;
@@ -14,11 +13,9 @@ import javax.swing.JTree;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
-import javax.swing.UIManager;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
-import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
@@ -31,21 +28,18 @@ import java.util.List;
 import java.util.function.Consumer;
 
 public class FileTree extends JTree {
-    private static final Color SELECTION_BACKGROUND = new Color(218, 235, 252);
     private static final String REINDEX_SELECTED_DIRECTORY_ACTION = "reindexSelectedDirectory";
     private static final String REINDEX_SELECTED_DIRECTORY_CHANGES_ACTION = "reindexSelectedDirectoryChanges";
     private final IndexService indexService;
     private final Consumer<List<IndexItem>> selectedFilesConsumer;
+    private final FileTreeModeler modeler = new FileTreeModeler();
 
     public FileTree(Context context, Consumer<List<IndexItem>> selectedFilesConsumer) {
         super(createRoot(context.indexReaderService().getCurrentRootIndexItem()));
         this.indexService = context.indexService();
         this.selectedFilesConsumer = selectedFilesConsumer;
-        setOpaque(false);
         setToggleClickCount(1);
-        putClientProperty("JTree.lineStyle", "None");
-        UIManager.put("Tree.collapsedIcon", new TreeToggleIcon(false));
-        UIManager.put("Tree.expandedIcon", new TreeToggleIcon(true));
+        modeler.modelTree(this);
         updateUI();
         setCellRenderer(new FileTreeCellRenderer());
         addMouseListener(new FileTreeSelectionListener());
@@ -68,11 +62,10 @@ public class FileTree extends JTree {
             return;
         }
 
-        graphics.setColor(SELECTION_BACKGROUND);
         for (int selectedRow : selectedRows) {
             Rectangle rowBounds = getRowBounds(selectedRow);
             if (rowBounds != null) {
-                graphics.fillRect(0, rowBounds.y, getWidth(), rowBounds.height);
+                modeler.paintSelectionRow(graphics, rowBounds, getWidth());
             }
         }
     }

@@ -12,7 +12,6 @@ import javax.swing.SwingUtilities;
 import java.awt.CardLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
-import java.awt.Insets;
 import java.util.List;
 
 public class ContentPane extends JPanel {
@@ -27,10 +26,15 @@ public class ContentPane extends JPanel {
 
     public ContentPane(Context context, PlaylistPane playlist) {
         super(new GridBagLayout());
+        ContentPaneModeler modeler = new ContentPaneModeler();
+        modeler.modelPane(this);
 
         this.tracksTable = new TracksTable(context, playlist::addTracks);
-        tracksArea.add(new JScrollPane(tracksTable), TRACKS_CARD);
+        JScrollPane tracksScrollPane = new JScrollPane(tracksTable);
+        modeler.modelScrollPane(tracksScrollPane);
+        tracksArea.add(tracksScrollPane, TRACKS_CARD);
         tracksArea.add(progressPanel, PROGRESS_CARD);
+        modeler.modelTracksArea(tracksArea);
         context.indexService().addProgressListener(progress ->
                 SwingUtilities.invokeLater(() -> showIndexingProgress(progress)));
 
@@ -40,7 +44,7 @@ public class ContentPane extends JPanel {
         c.fill = GridBagConstraints.BOTH;
         c.gridy = 0;
         c.weighty = 1.0;
-        c.insets = new Insets(0, 5, 0, 5);
+        c.insets = modeler.contentInsets();
 
         c.gridx = 0;
         c.weightx = 0.2;
@@ -103,12 +107,15 @@ public class ContentPane extends JPanel {
 
         private ProgressPanel() {
             super(new GridBagLayout());
-            progressBar.setStringPainted(true);
+            ContentPaneModeler modeler = new ContentPaneModeler();
+            modeler.modelProgressPanel(this);
+            modeler.modelProgressLabel(label);
+            modeler.modelProgressBar(progressBar);
 
             GridBagConstraints c = new GridBagConstraints();
             c.gridx = 0;
             c.gridy = 0;
-            c.insets = new Insets(0, 20, 8, 20);
+            c.insets = modeler.progressLabelInsets();
             add(label, c);
 
             c.gridy = 1;

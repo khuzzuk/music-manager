@@ -24,6 +24,7 @@ public class MP3Player implements SoundPlayer {
     });
     private SoundFile currentSoundFile;
     private AdvancedPlayer currentPlayer;
+    private VolumeAwareJavaSoundAudioDevice currentAudioDevice;
     private InputStream currentStream;
     private long playbackSession;
     private Mp3Info currentMp3Info;
@@ -31,6 +32,7 @@ public class MP3Player implements SoundPlayer {
     private long playbackStartNanos;
     private boolean paused;
     private boolean stopped = true;
+    private int volumePercent = 100;
 
     @Override
     public void play(SoundFile soundFile) {
@@ -121,6 +123,16 @@ public class MP3Player implements SoundPlayer {
         }
     }
 
+    @Override
+    public void setVolumePercent(int volumePercent) {
+        synchronized (lock) {
+            this.volumePercent = Math.clamp(volumePercent, 0, 100);
+            if (currentAudioDevice != null) {
+                currentAudioDevice.setVolumePercent(this.volumePercent);
+            }
+        }
+    }
+
     private void start(SoundFile soundFile) {
         start(soundFile, readMp3Info(soundFile), 0);
     }
@@ -199,7 +211,8 @@ public class MP3Player implements SoundPlayer {
 
     private void playFromFrame(SoundFile soundFile, int startFrame, long session) {
         try (InputStream stream = new BufferedInputStream(Files.newInputStream(Path.of(soundFile.path())))) {
-            AdvancedPlayer player = new AdvancedPlayer(stream);
+            VolumeAwareJavaSoundAudioDevice audioDevice = new VolumeAwareJavaSoundAudioDevice(this::getVolumePercent);
+            AdvancedPlayer player = new AdvancedPlayer(stream, audioDevice);
             player.setPlayBackListener(new CurrentFrameListener(startFrame, session));
             synchronized (lock) {
                 if (session != playbackSession) {
@@ -209,6 +222,7 @@ public class MP3Player implements SoundPlayer {
 
                 currentStream = stream;
                 currentPlayer = player;
+                currentAudioDevice = audioDevice;
             }
 
             player.play(startFrame, Integer.MAX_VALUE);
@@ -237,6 +251,7 @@ public class MP3Player implements SoundPlayer {
             synchronized (lock) {
                 if (session == playbackSession) {
                     currentPlayer = null;
+                    currentAudioDevice = null;
                     currentStream = null;
                 }
             }
@@ -253,6 +268,12 @@ public class MP3Player implements SoundPlayer {
             } catch (IOException ignored) {
                 // Closing playback is best effort.
             }
+        }
+    }
+
+    private int getVolumePercent() {
+        synchronized (lock) {
+            return volumePercent;
         }
     }
 

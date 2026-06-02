@@ -1,8 +1,9 @@
 package pl.khuzzuk.ui.icons;
 
+import pl.khuzzuk.ui.UiTheme;
+
 import javax.swing.Icon;
 import java.awt.BasicStroke;
-import java.awt.Color;
 import java.awt.Component;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -22,18 +23,14 @@ public class DirectoryIcon implements Icon {
         Graphics2D g = (Graphics2D) graphics.create();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-        Color tabColor = open ? new Color(157, 196, 232) : new Color(171, 190, 214);
-        Color bodyColor = open ? new Color(215, 233, 248) : new Color(225, 232, 241);
-        Color borderColor = open ? new Color(82, 132, 184) : new Color(106, 129, 157);
-
-        g.setColor(tabColor);
+        g.setColor(open ? UiTheme.DIRECTORY_TAB_OPEN : UiTheme.DIRECTORY_TAB);
         g.fillRoundRect(x + 3, y + 5, 12, 7, 5, 5);
-        g.setColor(bodyColor);
+        g.setColor(open ? UiTheme.DIRECTORY_BODY_OPEN : UiTheme.DIRECTORY_BODY);
         g.fillRoundRect(x + 2, y + 10, 26, 15, 7, 7);
         g.setStroke(new BasicStroke(1.2f));
-        g.setColor(borderColor);
+        g.setColor(open ? UiTheme.ACCENT : UiTheme.BORDER);
         g.drawRoundRect(x + 2, y + 10, 25, 14, 7, 7);
-        g.setColor(new Color(255, 255, 255, 135));
+        g.setColor(UiTheme.DIRECTORY_HIGHLIGHT);
         g.drawLine(x + 6, y + 13, x + 24, y + 13);
 
         g.dispose();

@@ -14,7 +14,6 @@ import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
-import java.awt.Dimension;
 import java.awt.event.KeyEvent;
 import java.io.IOException;
 import java.util.List;
@@ -28,6 +27,7 @@ class MetadataSuggestionTextField extends JTextField {
     private final DefaultListModel<String> suggestionsModel = new DefaultListModel<>();
     private final JList<String> suggestionsList = new JList<>(suggestionsModel);
     private final JPopupMenu suggestionsPopup = new JPopupMenu();
+    private final MetadataSuggestionTextFieldModeler modeler = new MetadataSuggestionTextFieldModeler();
     private boolean applyingSuggestion;
     private SwingWorker<List<String>, Void> suggestionsWorker;
     private int suggestionsRequest;
@@ -57,7 +57,7 @@ class MetadataSuggestionTextField extends JTextField {
             }
         });
 
-        suggestionsPopup.setFocusable(false);
+        modeler.modelSuggestionsPopup(suggestionsPopup);
         suggestionsPopup.add(new JScrollPane(suggestionsList));
     }
 
@@ -178,8 +178,7 @@ class MetadataSuggestionTextField extends JTextField {
         }
 
         suggestionsList.setSelectedIndex(0);
-        suggestionsList.setPreferredSize(new Dimension(getWidth(), suggestionsList.getPreferredScrollableViewportSize().height));
-        suggestionsPopup.setPreferredSize(new Dimension(getWidth(), suggestionsPopup.getPreferredSize().height));
+        modeler.modelSuggestionsSize(suggestionsList, suggestionsPopup, getWidth());
         suggestionsPopup.show(this, 0, getHeight());
     }
 

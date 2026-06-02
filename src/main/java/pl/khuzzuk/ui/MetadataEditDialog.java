@@ -4,7 +4,6 @@ import pl.khuzzuk.metadata.MetadataIndexReaderService;
 import pl.khuzzuk.metadata.SoundFileMetadata;
 import pl.khuzzuk.metadata.Tag;
 
-import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
@@ -18,11 +17,9 @@ import javax.swing.event.DocumentListener;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
-import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
-import java.awt.Insets;
 import java.awt.Window;
 import java.util.EnumMap;
 import java.util.List;
@@ -31,7 +28,6 @@ import java.util.Objects;
 import java.util.Optional;
 
 public class MetadataEditDialog extends JDialog {
-    private static final Color CHANGED_FIELD_COLOR = new Color(224, 240, 255);
     private static final List<Tag> SUGGESTED_TAGS = List.of(
             Tag.ARTIST,
             Tag.COMPOSER,
@@ -44,6 +40,7 @@ public class MetadataEditDialog extends JDialog {
     private final Map<Tag, JComponent> editors = new EnumMap<>(Tag.class);
     private final Map<Tag, Object> initialValues = new EnumMap<>(Tag.class);
     private final Map<Tag, Color> editorBackgrounds = new EnumMap<>(Tag.class);
+    private final MetadataEditDialogModeler modeler = new MetadataEditDialogModeler();
     private Map<Tag, Object> result;
 
     public static Optional<Map<Tag, Object>> showDialog(
@@ -75,16 +72,16 @@ public class MetadataEditDialog extends JDialog {
         add(createForm(metadataItems, writableTags), BorderLayout.CENTER);
         add(createButtons(), BorderLayout.SOUTH);
 
-        setMinimumSize(new Dimension(520, 420));
+        modeler.modelDialog(this);
         pack();
     }
 
     private JComponent createForm(List<SoundFileMetadata> metadataItems, List<Tag> writableTags) {
         JPanel form = new JPanel(new GridBagLayout());
-        form.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        modeler.modelForm(form);
 
         GridBagConstraints constraints = new GridBagConstraints();
-        constraints.insets = new Insets(4, 4, 4, 4);
+        constraints.insets = modeler.formFieldInsets();
         constraints.gridy = 0;
         constraints.anchor = GridBagConstraints.WEST;
 
@@ -93,9 +90,12 @@ public class MetadataEditDialog extends JDialog {
             constraints.gridx = 0;
             constraints.weightx = 0;
             constraints.fill = GridBagConstraints.NONE;
-            form.add(new JLabel(tag.label()), constraints);
+            JLabel label = new JLabel(tag.label());
+            modeler.modelFieldLabel(label);
+            form.add(label, constraints);
 
             JComponent editor = createEditor(tag, fieldState.initialValue());
+            modeler.modelEditor(editor);
             editor.setEnabled(fieldState.editable());
             editors.put(tag, editor);
             initialValues.put(tag, fieldState.initialValue());
@@ -110,7 +110,7 @@ public class MetadataEditDialog extends JDialog {
         }
 
         JScrollPane scrollPane = new JScrollPane(form);
-        scrollPane.setBorder(BorderFactory.createEmptyBorder());
+        modeler.modelFormScrollPane(scrollPane);
         return scrollPane;
     }
 
@@ -156,13 +156,16 @@ public class MetadataEditDialog extends JDialog {
             return;
         }
 
-        editor.setBackground(isChanged(tag) ? CHANGED_FIELD_COLOR : editorBackgrounds.get(tag));
+        modeler.modelEditorChangeState(editor, isChanged(tag), editorBackgrounds.get(tag));
     }
 
     private JComponent createButtons() {
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        modeler.modelButtonsPanel(buttons);
         JButton cancelButton = new JButton("Anuluj");
         JButton saveButton = new JButton("Zapisz");
+        modeler.modelCancelButton(cancelButton);
+        modeler.modelSaveButton(saveButton);
 
         cancelButton.addActionListener(ignored -> dispose());
         saveButton.addActionListener(ignored -> {

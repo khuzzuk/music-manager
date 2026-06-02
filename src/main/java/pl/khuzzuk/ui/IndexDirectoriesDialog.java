@@ -29,6 +29,7 @@ public class IndexDirectoriesDialog extends JDialog {
     private final SettingsService settingsService;
     private final IndexService indexService;
     private final IndexReaderService indexReaderService;
+    private final IndexDirectoriesDialogModeler modeler = new IndexDirectoriesDialogModeler();
     private JButton addButton;
 
     public IndexDirectoriesDialog(Window owner, Context context) {
@@ -37,6 +38,7 @@ public class IndexDirectoriesDialog extends JDialog {
         this.indexService = context.indexService();
         this.indexReaderService = context.indexReaderService();
         setSize(500, 300);
+        modeler.modelDialog(this);
     }
 
     public void showDialog() {
@@ -52,11 +54,16 @@ public class IndexDirectoriesDialog extends JDialog {
         DefaultListModel<Path> indexedPathsModel = new DefaultListModel<>();
         settingsService.getSettings().indexedPaths().forEach(indexedPathsModel::addElement);
         JList<Path> indexedPathsList = new JList<>(indexedPathsModel);
-        add(new JScrollPane(indexedPathsList), BorderLayout.CENTER);
+        modeler.modelPathsList(indexedPathsList);
+        JScrollPane indexedPathsScrollPane = new JScrollPane(indexedPathsList);
+        modeler.modelScrollPane(indexedPathsScrollPane);
+        add(indexedPathsScrollPane, BorderLayout.CENTER);
 
         addButton = new JButton("Dodaj");
+        modeler.modelAddButton(addButton);
         addButton.addActionListener(ignored -> addIndexDirectory());
         JPanel buttonPanel = new JPanel();
+        modeler.modelButtonPanel(buttonPanel);
         buttonPanel.add(addButton);
         add(buttonPanel, BorderLayout.SOUTH);
 

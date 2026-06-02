@@ -1,8 +1,9 @@
 package pl.khuzzuk.ui.icons;
 
+import pl.khuzzuk.ui.UiTheme;
+
 import javax.swing.Icon;
 import java.awt.BasicStroke;
-import java.awt.Color;
 import java.awt.Component;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -21,7 +22,7 @@ public class TreeToggleIcon implements Icon {
         Graphics2D g = (Graphics2D) graphics.create();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setStroke(new BasicStroke(1.7f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-        g.setColor(new Color(96, 116, 140));
+        g.setColor(UiTheme.ACCENT_DARK);
 
         int centerY = y + SIZE / 2;
         if (expanded) {

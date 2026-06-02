@@ -64,6 +64,9 @@ public class TracksTable extends JTable {
                 ? SettingsToPropertiesMapper.DEFAULT_TRACK_COLUMNS
                 : List.copyOf(configuredColumns);
         getTableHeader().addMouseListener(new SaveColumnsListener());
+        setFocusTraversalKeysEnabled(false);
+        TracksTableModeler modeler = new TracksTableModeler();
+        modeler.modelTable(this);
         RatingMouseListener ratingMouseListener = new RatingMouseListener();
         addMouseMotionListener(ratingMouseListener);
         addMouseListener(ratingMouseListener);
@@ -172,8 +175,11 @@ public class TracksTable extends JTable {
     }
 
     private void registerAddSelectedToPlaylistAction() {
+        getInputMap(WHEN_FOCUSED).put(
+                KeyStroke.getKeyStroke(KeyEvent.VK_TAB, 0),
+                ADD_SELECTED_TO_PLAYLIST_ACTION);
         getInputMap(WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(
-                KeyStroke.getKeyStroke(KeyEvent.VK_SPACE, 0),
+                KeyStroke.getKeyStroke(KeyEvent.VK_TAB, 0),
                 ADD_SELECTED_TO_PLAYLIST_ACTION);
         Action action = new AbstractAction() {
             @Override

@@ -1,6 +1,5 @@
 package pl.khuzzuk.ui;
 
-import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -9,11 +8,8 @@ import javax.swing.SwingConstants;
 import javax.swing.Timer;
 import javax.swing.event.ChangeEvent;
 import java.awt.BorderLayout;
-import java.awt.Dimension;
 import java.awt.FlowLayout;
-import java.awt.Font;
 import java.awt.GridBagLayout;
-import java.awt.Insets;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 
@@ -31,12 +27,13 @@ public class PlayerPane extends JPanel {
     private final JLabel durationTimeLabel;
     private final PlayerController playerController;
     private final Timer progressTimer;
+    private final PlayerPaneModeler modeler = new PlayerPaneModeler();
 
     public PlayerPane(PlayerController playerController) {
         this.playerController = playerController;
         this.progressTimer = new Timer(PROGRESS_REFRESH_MILLIS, ignored -> updateProgress());
-        setLayout(new BorderLayout(5, 5));
-        setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+        setLayout(new BorderLayout(14, 0));
+        modeler.modelPane(this);
 
         previousButton = createIconButton("⏮", "Previous track");
         previousButton.addActionListener(ignored -> playPrevious());
@@ -48,54 +45,59 @@ public class PlayerPane extends JPanel {
         nextButton.addActionListener(ignored -> playNext());
 
         JPanel playControls = new JPanel();
-        playControls.setLayout(new FlowLayout(FlowLayout.CENTER, 5, 5));
+        playControls.setLayout(new FlowLayout(FlowLayout.CENTER, 8, 0));
+        modeler.modelControlsPanel(playControls);
         playControls.add(previousButton);
         playControls.add(playPauseButton);
         playControls.add(stopButton);
         playControls.add(nextButton);
         JPanel playControlsWrapper = new JPanel(new GridBagLayout());
+        modeler.modelControlsPanel(playControlsWrapper);
         playControlsWrapper.add(playControls);
 
         progressSlider = new JSlider(0, 100, 0);
-        progressSlider.setPaintTicks(false);
-        progressSlider.setPaintLabels(false);
-        progressSlider.setFocusable(false);
-        progressSlider.setBorder(BorderFactory.createEmptyBorder(20, 5, 20, 5));
-        progressSlider.addMouseListener(new ProgressMouseListener());
+        modeler.modelProgressSlider(progressSlider);
+        ProgressMouseListener progressMouseListener = new ProgressMouseListener();
+        progressSlider.addMouseListener(progressMouseListener);
+        progressSlider.addMouseMotionListener(progressMouseListener);
 
         currentTimeLabel = createTimeLabel();
         durationTimeLabel = createTimeLabel();
-        JPanel timeStatus = new JPanel(new FlowLayout(FlowLayout.RIGHT, 3, 5));
+        JPanel timeStatus = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        modeler.modelStatusPanel(timeStatus);
         timeStatus.add(currentTimeLabel);
-        timeStatus.add(new JLabel("/"));
+        JLabel timeSeparator = new JLabel("/");
+        modeler.modelTimeSeparator(timeSeparator);
+        timeStatus.add(timeSeparator);
         timeStatus.add(durationTimeLabel);
         updateTimeLabels(0, 0);
 
         volumeSlider = new JSlider(SwingConstants.VERTICAL, 0, 100, 60);
-        volumeSlider.setFocusable(false);
-        volumeSlider.setPaintTicks(false);
-        volumeSlider.setPaintLabels(false);
-        volumeSlider.setPreferredSize(new Dimension(20, 100));
+        modeler.modelVolumeSlider(volumeSlider);
         volumeSlider.setToolTipText("Glosnosc");
         volumeSlider.addChangeListener(this::volumeChange);
+        playerController.setVolumePercent(volumeSlider.getValue());
 
         JPanel playStatus = new JPanel();
-        playStatus.setLayout(new BorderLayout(5, 5));
+        playStatus.setLayout(new BorderLayout(14, 0));
+        modeler.modelStatusPanel(playStatus);
         playStatus.add(playControlsWrapper, BorderLayout.WEST);
         playStatus.add(progressSlider, BorderLayout.CENTER);
         playStatus.add(timeStatus, BorderLayout.EAST);
 
+        JPanel volumeStatus = new JPanel(new GridBagLayout());
+        modeler.modelVolumePanel(volumeStatus);
+        volumeStatus.add(volumeSlider);
+
         add(playStatus, BorderLayout.CENTER);
-        add(volumeSlider, BorderLayout.WEST);
+        add(volumeStatus, BorderLayout.WEST);
     }
 
     private void volumeChange(ChangeEvent e) {
-        if (!volumeSlider.getValueIsAdjusting()) {
-            System.out.println(volumeSlider.getValue());
-        }
+        playerController.setVolumePercent(volumeSlider.getValue());
     }
 
-    private void playPause() {
+    public void playPause() {
         boolean playing = playerController.playPause(this);
         updatePlaybackState(playing);
     }
@@ -171,22 +173,14 @@ public class PlayerPane extends JPanel {
     private JButton createIconButton(String symbol, String tooltip) {
         JButton button = new JButton(symbol);
         button.setToolTipText(tooltip);
-        button.setFont(new Font("Segoe UI Symbol", Font.PLAIN, 14));
-        button.setFocusable(false);
-        button.setContentAreaFilled(false);
-        button.setOpaque(false);
+        modeler.modelIconButton(button);
         button.getAccessibleContext().setAccessibleName(tooltip);
-        button.setPreferredSize(new Dimension(48, 36));
-        button.setMinimumSize(new Dimension(48, 36));
-        button.setMargin(new Insets(0, 0, 0, 0));
         return button;
     }
 
     private JLabel createTimeLabel() {
         JLabel label = new JLabel();
-        label.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-        label.setHorizontalAlignment(SwingConstants.RIGHT);
-        label.setPreferredSize(new Dimension(48, 20));
+        modeler.modelTimeLabel(label);
         return label;
     }
 
@@ -210,6 +204,11 @@ public class PlayerPane extends JPanel {
     private class ProgressMouseListener extends MouseAdapter {
         @Override
         public void mousePressed(MouseEvent event) {
+            seekProgress(event);
+        }
+
+        @Override
+        public void mouseDragged(MouseEvent event) {
             seekProgress(event);
         }
     }

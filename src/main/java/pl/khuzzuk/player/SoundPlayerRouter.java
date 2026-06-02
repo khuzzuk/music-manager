@@ -8,6 +8,7 @@ public class SoundPlayerRouter implements SoundPlayer {
     private final SoundPlayer wavPlayer;
     private final SoundPlayer oggPlayer;
     private SoundPlayer currentPlayer;
+    private int volumePercent = 100;
 
     public SoundPlayerRouter(SoundPlayer mp3Player, SoundPlayer flacPlayer, SoundPlayer wavPlayer, SoundPlayer oggPlayer) {
         this.mp3Player = mp3Player;
@@ -21,6 +22,7 @@ public class SoundPlayerRouter implements SoundPlayer {
         SoundPlayer player = playerFor(soundFile);
         stopCurrentIfDifferent(player);
         currentPlayer = player;
+        player.setVolumePercent(volumePercent);
         player.play(soundFile);
     }
 
@@ -50,6 +52,15 @@ public class SoundPlayerRouter implements SoundPlayer {
         if (currentPlayer != null) {
             currentPlayer.seekToMillis(positionMillis);
         }
+    }
+
+    @Override
+    public void setVolumePercent(int volumePercent) {
+        this.volumePercent = Math.clamp(volumePercent, 0, 100);
+        mp3Player.setVolumePercent(this.volumePercent);
+        flacPlayer.setVolumePercent(this.volumePercent);
+        wavPlayer.setVolumePercent(this.volumePercent);
+        oggPlayer.setVolumePercent(this.volumePercent);
     }
 
     @Override

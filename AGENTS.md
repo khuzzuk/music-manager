@@ -13,6 +13,19 @@ Do not use `Optional` as an object field type or as a method/constructor
 parameter type. `Optional` is acceptable as a return type when it clearly models
 an absent result.
 
+UI element styling should live in dedicated `Modeler` classes. View classes
+should create components, compose layout, and wire behavior, while font, color,
+border, opacity, size, margin, and similar visual details should be applied by
+a modeler such as `PlayerPaneModeler`.
+
+For UI design work, read:
+
+- `docs/ui-style-guide-codex.md`
+
+That document describes the "Cinematic Classical Archive" visual identity,
+palette, typography, component styling rules, and guidance for keeping the UI
+modern with a subtle historical flavor.
+
 For documentation work, use:
 
 - `docs/codex-documentation-prompt.md`
