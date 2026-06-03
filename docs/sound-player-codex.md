@@ -66,6 +66,7 @@ void pause();
 void resume();
 void stop();
 void seekToMillis(int positionMillis);
+void setVolumePercent(int volumePercent);
 int getCurrentPositionMillis();
 int getCurrentDurationMillis();
 ```
@@ -82,6 +83,8 @@ Expected behavior:
 - Seeking while playing should resume immediately from the new position.
 - Seeking while paused should update the stored position without starting audio.
 - Position and duration are exposed in milliseconds for `PlayerPane.progressSlider`.
+- `setVolumePercent(...)` clamps the requested volume into `0..100` and applies it
+  to current and future playback.
 - Implementations should throw `IllegalArgumentException` for invalid
   `SoundFile` input and `IllegalStateException` for playback/read failures.
 
@@ -121,6 +124,25 @@ seek representation.
 For MP3, JLayer `PlaybackEvent.getFrame()` is not a reliable MP3 frame number in
 this project. It reports the audio device position. Do not use it as the primary
 source for seek frame state.
+
+## Volume Control
+
+The vertical volume slider in `PlayerPane` is wired through
+`PlayerController.setVolumePercent(...)` to the global `SoundPlayer`. The slider
+currently initializes playback volume to `60`.
+
+`SoundPlayerRouter` stores the current volume percent, propagates changes to all
+concrete players, and reapplies the stored volume before starting a selected
+format player. This keeps volume consistent when switching between MP3, FLAC, WAV,
+and OGG tracks.
+
+Java Sound based players use `AudioLineVolume` to apply volume to an active
+`SourceDataLine`. It prefers `FloatControl.Type.VOLUME` when available and falls
+back to `FloatControl.Type.MASTER_GAIN`.
+
+MP3 playback uses `VolumeAwareJavaSoundAudioDevice`, which applies the current
+volume when JLayer creates the underlying source line and can update the active
+line while playback is running.
 
 ## MP3Player Conventions
 
@@ -213,6 +235,7 @@ frame length.
 - reads the current `SoundFile` from `PlaylistPane`;
 - calls `SoundPlayer`;
 - tracks play/pause state for the controls;
+- forwards volume slider changes to `SoundPlayer.setVolumePercent(...)`;
 - advances to the next playlist item when current playback reaches duration.
 
 `PlayerPane.progressSlider` displays milliseconds. A Swing `Timer` refreshes it
@@ -236,6 +259,8 @@ When changing playback code:
 - Preserve pause/resume semantics: resume must continue from the stored
   millisecond position.
 - Preserve seek semantics for both playing and paused states.
+- Preserve volume as a `0..100` percent value and keep it effective across format
+  switches through `SoundPlayerRouter`.
 - Preserve progress slider updates in milliseconds.
 - Do not block the Swing EDT with decoder or file I/O work.
 - Do not let stale playback tasks clear current playback state.
@@ -253,4 +278,6 @@ When changing playback code:
   available on the runtime classpath.
 - Current players do not expose completion callbacks. `PlayerController` detects
   completion by comparing current position with duration during timer refresh.
-- Volume slider is present in UI but is not wired to player output.
+- Volume support depends on the active Java Sound line exposing either
+  `FloatControl.Type.VOLUME` or `FloatControl.Type.MASTER_GAIN`. If neither
+  control is available, the volume request is ignored for that line.
