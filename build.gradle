@@ -1,9 +1,17 @@
 plugins {
     id 'java'
+    id 'application'
 }
+
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 group = 'pl.khuzzuk'
 version = '1.0-SNAPSHOT'
+
+application {
+    mainClass = 'pl.khuzzuk.MusicManager'
+}
 
 repositories {
     mavenCentral()
@@ -24,4 +32,74 @@ dependencies {
 
 test {
     useJUnitPlatform()
+}
+
+jar {
+    manifest {
+        attributes 'Main-Class': application.mainClass.get()
+    }
+}
+
+def portableAppName = 'Music Manager'
+def portableAppVersion = '1.0.0'
+def portableIconPath = layout.projectDirectory.file('src/main/resources/icons/music-manager-icon.ico')
+def portableImageRoot = layout.buildDirectory.dir('jpackage')
+def portableImageDir = portableImageRoot.map { it.dir(portableAppName) }
+def portableInstallLibDir = layout.buildDirectory.dir("install/${project.name}/lib")
+
+tasks.register('jpackagePortable', Exec) {
+    group = 'distribution'
+    description = 'Builds a portable Windows app image with a bundled Java runtime.'
+    dependsOn tasks.named('installDist')
+
+    inputs.dir(portableInstallLibDir)
+    inputs.file(portableIconPath)
+    outputs.dir(portableImageDir)
+
+    doFirst {
+        delete portableImageRoot
+    }
+
+    commandLine(
+            'jpackage',
+            '--type', 'app-image',
+            '--name', portableAppName,
+            '--dest', portableImageRoot.get().asFile.absolutePath,
+            '--input', portableInstallLibDir.get().asFile.absolutePath,
+            '--main-jar', tasks.named('jar').get().archiveFileName.get(),
+            '--main-class', application.mainClass.get(),
+            '--icon', portableIconPath.asFile.absolutePath,
+            '--app-version', portableAppVersion,
+            '--java-options', '-Dfile.encoding=UTF-8'
+    )
+}
+
+tasks.register('portableLauncher') {
+    group = 'distribution'
+    description = 'Creates a portable launcher that starts the app from its own directory.'
+    dependsOn tasks.named('jpackagePortable')
+
+    def launcherFile = portableImageDir.map { it.file("${portableAppName} Portable.bat") }
+    outputs.file(launcherFile)
+
+    doLast {
+        Files.copy(
+                portableIconPath.asFile.toPath(),
+                portableImageDir.get().file("${portableAppName}.ico").asFile.toPath(),
+                StandardCopyOption.REPLACE_EXISTING)
+        launcherFile.get().asFile.text = """@echo off
+cd /d "%~dp0"
+start "" "%~dp0${portableAppName}.exe"
+"""
+    }
+}
+
+tasks.register('portableZip', Zip) {
+    group = 'distribution'
+    description = 'Builds a ZIP archive of the portable Windows app image.'
+    dependsOn tasks.named('portableLauncher')
+
+    archiveFileName = "${project.name}-portable-${portableAppVersion}.zip"
+    destinationDirectory = layout.buildDirectory.dir('portable')
+    from(portableImageDir)
 }
