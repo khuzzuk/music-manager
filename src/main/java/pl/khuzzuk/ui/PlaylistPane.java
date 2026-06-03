@@ -7,30 +7,42 @@ import pl.khuzzuk.player.SoundFile;
 import pl.khuzzuk.settings.Settings;
 
 import javax.swing.AbstractAction;
+import javax.swing.JMenuItem;
+import javax.swing.JPopupMenu;
 import javax.swing.JTable;
 import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.JScrollPane;
+import javax.swing.SwingUtilities;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.TableColumnModel;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.function.Consumer;
 
 public class PlaylistPane extends JScrollPane {
     private static final String REMOVE_SELECTED_ACTION = "removeSelected";
     private final PlaylistTableModel playlistModel = new PlaylistTableModel();
     private final PlaylistMapper playlistMapper = new PlaylistMapper();
+    private final PlaylistPaneModeler modeler = new PlaylistPaneModeler();
     private final JTable playlist;
     private PlaylistSoundFile first;
     private PlaylistSoundFile last;
     private PlaylistSoundFile currentPlaying;
+    private Consumer<Path> goToPathConsumer;
+    private boolean contextMenuShownOnPress;
 
     public PlaylistPane(Context context) {
         super();
-        PlaylistPaneModeler modeler = new PlaylistPaneModeler();
         modeler.modelPane(this);
         playlist = new JTable(playlistModel);
         playlist.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
@@ -38,14 +50,32 @@ public class PlaylistPane extends JScrollPane {
         modeler.modelPlaylist(playlist);
         configureColumns();
         registerRemoveSelectedAction();
+        playlist.addMouseListener(new PlaylistMouseListener());
         setViewportView(playlist);
         restorePlaylist(context.settingsService().getSettings());
+    }
+
+    void setGoToPathConsumer(Consumer<Path> goToPathConsumer) {
+        this.goToPathConsumer = goToPathConsumer;
     }
 
     public void addTracks(List<SoundFileMetadata> tracks) {
         for (SoundFileMetadata track : tracks) {
             append(new PlaylistSoundFile(new SoundFile(track.path().toString(), title(track))));
         }
+    }
+
+    List<SoundFile> getSoundFiles() {
+        return soundFiles();
+    }
+
+    void replaceTracks(List<SoundFile> soundFiles) {
+        clear();
+        for (SoundFile soundFile : soundFiles) {
+            append(new PlaylistSoundFile(soundFile));
+        }
+        currentPlaying = first;
+        playlistModel.fireTableDataChanged();
     }
 
     String getPlaylistPaths() {
@@ -97,6 +127,12 @@ public class PlaylistPane extends JScrollPane {
         playlistModel.fireTableDataChanged();
     }
 
+    private void clear() {
+        first = null;
+        last = null;
+        currentPlaying = null;
+    }
+
     private List<SoundFile> soundFiles() {
         List<SoundFile> soundFiles = new ArrayList<>();
         PlaylistSoundFile current = first;
@@ -110,6 +146,30 @@ public class PlaylistPane extends JScrollPane {
 
     public SoundFile getCurrentSoundFile() {
         return currentPlaying == null ? null : currentPlaying.soundFile();
+    }
+
+    public void removeSoundFiles(Collection<Path> paths) {
+        Set<Path> removablePaths = normalizePaths(paths);
+        if (removablePaths.isEmpty()) {
+            return;
+        }
+
+        boolean removed = false;
+        PlaylistSoundFile current = first;
+        while (current != null) {
+            PlaylistSoundFile next = current.next();
+            Path currentPath = Path.of(current.soundFile().path()).toAbsolutePath().normalize();
+            if (removablePaths.contains(currentPath)) {
+                unlink(current);
+                removed = true;
+            }
+            current = next;
+        }
+
+        if (removed) {
+            playlistModel.fireTableDataChanged();
+            playlist.repaint();
+        }
     }
 
     public SoundFile moveToNextSoundFile() {
@@ -192,6 +252,20 @@ public class PlaylistPane extends JScrollPane {
         playlistSoundFile.setNext(null);
     }
 
+    private Set<Path> normalizePaths(Collection<Path> paths) {
+        Set<Path> normalizedPaths = new HashSet<>();
+        if (paths == null) {
+            return normalizedPaths;
+        }
+
+        for (Path path : paths) {
+            if (path != null) {
+                normalizedPaths.add(path.toAbsolutePath().normalize());
+            }
+        }
+        return normalizedPaths;
+    }
+
     private String title(SoundFileMetadata track) {
         if (track.title() != null && !track.title().isBlank()) {
             return track.title();
@@ -201,6 +275,31 @@ public class PlaylistPane extends JScrollPane {
         }
 
         return "";
+    }
+
+    private void showContextMenu(MouseEvent event) {
+        int row = playlist.rowAtPoint(event.getPoint());
+        if (row < 0) {
+            return;
+        }
+
+        if (!playlist.isRowSelected(row)) {
+            playlist.setRowSelectionInterval(row, row);
+        }
+
+        PlaylistSoundFile playlistSoundFile = playlistModel.getAt(row);
+        if (playlistSoundFile == null || goToPathConsumer == null) {
+            return;
+        }
+
+        JPopupMenu menu = new JPopupMenu();
+        modeler.modelContextMenu(menu);
+        JMenuItem goToItem = new JMenuItem("Idź do");
+        modeler.modelContextMenuItem(goToItem);
+        goToItem.addActionListener(ignored ->
+                goToPathConsumer.accept(Path.of(playlistSoundFile.soundFile().path())));
+        menu.add(goToItem);
+        menu.show(event.getComponent(), event.getX(), event.getY());
     }
 
     private int numberOf(PlaylistSoundFile playlistSoundFile) {
@@ -216,6 +315,31 @@ public class PlaylistPane extends JScrollPane {
         }
 
         return 0;
+    }
+
+    private class PlaylistMouseListener extends MouseAdapter {
+        @Override
+        public void mousePressed(MouseEvent event) {
+            contextMenuShownOnPress = showContextMenuIfNeeded(event);
+        }
+
+        @Override
+        public void mouseReleased(MouseEvent event) {
+            if (contextMenuShownOnPress) {
+                contextMenuShownOnPress = false;
+                return;
+            }
+
+            showContextMenuIfNeeded(event);
+        }
+
+        private boolean showContextMenuIfNeeded(MouseEvent event) {
+            if (event.isPopupTrigger() || SwingUtilities.isRightMouseButton(event)) {
+                showContextMenu(event);
+                return true;
+            }
+            return false;
+        }
     }
 
     private class PlaylistTableModel extends AbstractTableModel {

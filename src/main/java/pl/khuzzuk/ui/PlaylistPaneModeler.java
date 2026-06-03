@@ -1,6 +1,8 @@
 package pl.khuzzuk.ui;
 
 import javax.swing.JScrollPane;
+import javax.swing.JMenuItem;
+import javax.swing.JPopupMenu;
 import javax.swing.JTable;
 import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.Component;
@@ -21,6 +23,18 @@ class PlaylistPaneModeler {
         playlist.setShowGrid(false);
         playlist.setFillsViewportHeight(true);
         playlist.setDefaultRenderer(Object.class, new PlaylistCellRenderer());
+    }
+
+    void modelContextMenu(JPopupMenu menu) {
+        menu.setBackground(UiTheme.SURFACE);
+        menu.setBorder(UiTheme.lineBorder());
+    }
+
+    void modelContextMenuItem(JMenuItem item) {
+        item.setFont(UiTheme.BODY_FONT);
+        item.setForeground(UiTheme.INK);
+        item.setBackground(UiTheme.SURFACE);
+        item.setBorder(UiTheme.empty(5, 10, 5, 10));
     }
 
     private static class PlaylistCellRenderer extends DefaultTableCellRenderer {

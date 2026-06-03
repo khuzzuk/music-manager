@@ -85,6 +85,16 @@ public class MetadataEditDialog extends JDialog {
         constraints.gridy = 0;
         constraints.anchor = GridBagConstraints.WEST;
 
+        JLabel pathLabel = new JLabel(createPathLabelText(metadataItems));
+        modeler.modelPathLabel(pathLabel);
+        constraints.gridx = 0;
+        constraints.gridwidth = 2;
+        constraints.weightx = 1;
+        constraints.fill = GridBagConstraints.HORIZONTAL;
+        form.add(pathLabel, constraints);
+        constraints.gridy++;
+        constraints.gridwidth = 1;
+
         for (Tag tag : writableTags) {
             FieldState fieldState = getFieldState(metadataItems, tag);
             constraints.gridx = 0;
@@ -112,6 +122,34 @@ public class MetadataEditDialog extends JDialog {
         JScrollPane scrollPane = new JScrollPane(form);
         modeler.modelFormScrollPane(scrollPane);
         return scrollPane;
+    }
+
+    private String createPathLabelText(List<SoundFileMetadata> metadataItems) {
+        if (metadataItems == null || metadataItems.isEmpty()) {
+            return "Sciezka: ";
+        }
+
+        StringBuilder text = new StringBuilder("<html><body style='width: 460px'>");
+        text.append(metadataItems.size() == 1 ? "Sciezka: " : "Sciezki:");
+        for (SoundFileMetadata metadata : metadataItems) {
+            if (metadata.path() == null) {
+                continue;
+            }
+
+            if (metadataItems.size() > 1) {
+                text.append("<br>");
+            }
+            text.append(escapeHtml(metadata.path().toAbsolutePath().normalize().toString()));
+        }
+        text.append("</body></html>");
+        return text.toString();
+    }
+
+    private String escapeHtml(String value) {
+        return value
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;");
     }
 
     private JComponent createEditor(Tag tag, Object value) {

@@ -158,6 +158,29 @@ public class FileTree extends JTree {
         return toPosition(getSelectedIndexItem());
     }
 
+    List<IndexItem> selectContainingDirectory(Path path) {
+        if (path == null) {
+            return List.of();
+        }
+
+        DefaultMutableTreeNode root = (DefaultMutableTreeNode) getModel().getRoot();
+        TreePath selectionPath = findPath(root, path.toAbsolutePath().normalize().toString());
+        Path parent = path.toAbsolutePath().normalize().getParent();
+        while (selectionPath == null && parent != null) {
+            selectionPath = findPath(root, parent.toString());
+            parent = parent.getParent();
+        }
+        if (selectionPath == null) {
+            return List.of();
+        }
+
+        setSelectionPath(selectionPath);
+        scrollPathToVisible(selectionPath);
+
+        IndexItem selectedItem = getIndexItem(selectionPath);
+        return selectedItem == null ? List.of() : collectFiles(selectedItem);
+    }
+
     private IndexItem getIndexItem(TreePath path) {
         Object lastPathComponent = path.getLastPathComponent();
         if (!(lastPathComponent instanceof DefaultMutableTreeNode treeNode)

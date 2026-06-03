@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 
 public class SettingsToPropertiesMapper {
     public static final List<TrackColumn> DEFAULT_TRACK_COLUMNS = List.of(
+            new TrackColumn(Tag.FILE_NAME, 240),
             new TrackColumn(Tag.TITLE, 220),
             new TrackColumn(Tag.DURATION, 80),
             new TrackColumn(Tag.ALBUM, 180),

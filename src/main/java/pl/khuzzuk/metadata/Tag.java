@@ -5,6 +5,7 @@ import java.util.function.Function;
 
 public enum Tag {
     FORMAT("format", "Format", SoundFileMetadata::format),
+    FILE_NAME("fileName", "Nazwa pliku", SoundFileMetadata::fileName),
     TITLE("title", "Tytul", SoundFileMetadata::title),
     DURATION("duration", "Czas", SoundFileMetadata::duration),
     DATE("date", "Data", SoundFileMetadata::date),

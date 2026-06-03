@@ -25,6 +25,7 @@ import javax.swing.RowSorter;
 import javax.swing.KeyStroke;
 import javax.swing.SortOrder;
 import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import javax.swing.event.RowSorterListener;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableColumnModel;
@@ -34,23 +35,29 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 public class TracksTable extends JTable {
     private static final String ADD_SELECTED_TO_PLAYLIST_ACTION = "addSelectedToPlaylist";
     private static final String EDIT_SELECTED_METADATA_ACTION = "editSelectedMetadata";
+    private static final String DELETE_SELECTED_FILES_ACTION = "deleteSelectedFiles";
     private final SettingsService settingsService;
     private final MetadataWriterService metadataWriterService;
     private final MetadataIndexReaderService metadataIndexReaderService;
     private final MetadataIndexWriterService metadataIndexWriterService;
     private final TracksTableController controller;
+    private final PlaylistPane playlistPane;
+    private final PlayerController playerController;
     private final Consumer<List<SoundFileMetadata>> selectedTracksConsumer;
     private final SoundFileMetadataUpdateMapper soundFileMetadataUpdateMapper = new SoundFileMetadataUpdateMapper();
     private final RowSorterListener sortListener = ignored -> rememberCurrentSort();
@@ -66,14 +73,21 @@ public class TracksTable extends JTable {
     private boolean updatingModel;
     private boolean replacingModel;
     private boolean columnMenuShownOnPress;
+    private boolean contextMenuShownOnPress;
     private int sortColumnToClear = -1;
 
-    public TracksTable(Context context, Consumer<List<SoundFileMetadata>> selectedTracksConsumer) {
+    public TracksTable(
+            Context context,
+            PlaylistPane playlistPane,
+            PlayerController playerController,
+            Consumer<List<SoundFileMetadata>> selectedTracksConsumer) {
         this.settingsService = context.settingsService();
         this.metadataWriterService = context.metadataWriterService();
         this.metadataIndexReaderService = context.metadataIndexReaderService();
         this.metadataIndexWriterService = context.metadataIndexWriterService();
         this.controller = new TracksTableController(context);
+        this.playlistPane = playlistPane;
+        this.playerController = playerController;
         this.selectedTracksConsumer = selectedTracksConsumer;
         this.currentSort = List.copyOf(context.settingsService().getSettings().trackSort());
         List<TrackColumn> configuredColumns = context.settingsService().getSettings().trackColumns();
@@ -87,8 +101,10 @@ public class TracksTable extends JTable {
         RatingMouseListener ratingMouseListener = new RatingMouseListener();
         addMouseMotionListener(ratingMouseListener);
         addMouseListener(ratingMouseListener);
+        addMouseListener(new TrackMouseListener());
         registerAddSelectedToPlaylistAction();
         registerEditSelectedMetadataAction();
+        registerDeleteSelectedFilesAction();
         showMappedFiles(List.of());
     }
 
@@ -257,22 +273,44 @@ public class TracksTable extends JTable {
         getActionMap().put(EDIT_SELECTED_METADATA_ACTION, action);
     }
 
-    private void addSelectedToPlaylist() {
-        int[] selectedRows = getSelectedRows();
-        if (selectedRows.length == 0) {
-            return;
-        }
-
-        List<SoundFileMetadata> selectedTracks = new ArrayList<>();
-        for (int selectedRow : selectedRows) {
-            int modelRow = convertRowIndexToModel(selectedRow);
-            if (modelRow >= 0 && modelRow < rowMetadata.size()) {
-                selectedTracks.add(rowMetadata.get(modelRow));
+    private void registerDeleteSelectedFilesAction() {
+        KeyStroke deleteKeyStroke = KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, KeyEvent.CTRL_DOWN_MASK);
+        getInputMap(WHEN_FOCUSED).put(deleteKeyStroke, DELETE_SELECTED_FILES_ACTION);
+        getInputMap(WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(deleteKeyStroke, DELETE_SELECTED_FILES_ACTION);
+        Action action = new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent event) {
+                deleteSelectedFiles();
             }
+        };
+        getActionMap().put(DELETE_SELECTED_FILES_ACTION, action);
+    }
+
+    private void addSelectedToPlaylist() {
+        List<SoundFileMetadata> selectedTracks = new ArrayList<>();
+        for (int modelRow : selectedModelRows()) {
+            selectedTracks.add(rowMetadata.get(modelRow));
         }
 
         if (!selectedTracks.isEmpty()) {
             selectedTracksConsumer.accept(selectedTracks);
+        }
+    }
+
+    private void setSelectedTitlesToFileNames() {
+        if (isEditing() && getCellEditor() != null) {
+            getCellEditor().stopCellEditing();
+        }
+
+        for (int modelRow : selectedModelRows()) {
+            SoundFileMetadata metadata = rowMetadata.get(modelRow);
+            if (metadata.fileName() == null || metadata.fileName().isBlank()) {
+                continue;
+            }
+
+            if (!commitMetadataEdit(modelRow, Tag.TITLE, metadata.fileName())) {
+                return;
+            }
         }
     }
 
@@ -281,19 +319,11 @@ public class TracksTable extends JTable {
             getCellEditor().stopCellEditing();
         }
 
-        int[] selectedRows = getSelectedRows();
-        if (selectedRows.length == 0) {
-            return;
-        }
-
         List<Integer> modelRows = new ArrayList<>();
         List<SoundFileMetadata> selectedMetadata = new ArrayList<>();
-        for (int selectedRow : selectedRows) {
-            int modelRow = convertRowIndexToModel(selectedRow);
-            if (modelRow >= 0 && modelRow < rowMetadata.size()) {
-                modelRows.add(modelRow);
-                selectedMetadata.add(rowMetadata.get(modelRow));
-            }
+        for (int modelRow : selectedModelRows()) {
+            modelRows.add(modelRow);
+            selectedMetadata.add(rowMetadata.get(modelRow));
         }
 
         if (modelRows.isEmpty()) {
@@ -309,6 +339,134 @@ public class TracksTable extends JTable {
 
         MetadataEditDialog.showDialog(this, selectedMetadata, writableTags, metadataIndexReaderService)
                 .ifPresent(values -> commitMetadataEdits(modelRows, values));
+    }
+
+    private void deleteSelectedFiles() {
+        if (isEditing() && getCellEditor() != null) {
+            getCellEditor().stopCellEditing();
+        }
+
+        List<Path> selectedPaths = selectedPaths();
+        if (selectedPaths.isEmpty()) {
+            return;
+        }
+
+        int answer = JOptionPane.showConfirmDialog(
+                this,
+                "Usunac zaznaczone pliki? Tej operacji nie mozna cofnac.",
+                "Potwierdz usuniecie",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE);
+        if (answer != JOptionPane.YES_OPTION) {
+            return;
+        }
+
+        playerController.stopIfActiveSoundFile(selectedPaths);
+        playlistPane.removeSoundFiles(selectedPaths);
+        deleteFilesInBackground(selectedPaths);
+    }
+
+    private List<Path> selectedPaths() {
+        Set<Path> selectedPaths = new LinkedHashSet<>();
+        for (int selectedRow : getSelectedRows()) {
+            int modelRow = convertRowIndexToModel(selectedRow);
+            if (modelRow >= 0 && modelRow < rowPaths.size()) {
+                selectedPaths.add(rowPaths.get(modelRow).toAbsolutePath().normalize());
+            }
+        }
+        return List.copyOf(selectedPaths);
+    }
+
+    private List<Integer> selectedModelRows() {
+        List<Integer> modelRows = new ArrayList<>();
+        for (int selectedRow : getSelectedRows()) {
+            int modelRow = convertRowIndexToModel(selectedRow);
+            if (modelRow >= 0 && modelRow < rowMetadata.size()) {
+                modelRows.add(modelRow);
+            }
+        }
+        return List.copyOf(modelRows);
+    }
+
+    private void deleteFilesInBackground(List<Path> selectedPaths) {
+        setEnabled(false);
+        new SwingWorker<DeleteResult, Void>() {
+            @Override
+            protected DeleteResult doInBackground() {
+                List<Path> deletedPaths = new ArrayList<>();
+                List<Path> failedPaths = new ArrayList<>();
+                for (Path path : selectedPaths) {
+                    try {
+                        Files.delete(path);
+                        deletedPaths.add(path);
+                    } catch (IOException | SecurityException e) {
+                        failedPaths.add(path);
+                    }
+                }
+
+                deleteMetadata(deletedPaths);
+                return new DeleteResult(deletedPaths, failedPaths);
+            }
+
+            @Override
+            protected void done() {
+                setEnabled(true);
+                try {
+                    DeleteResult result = get();
+                    removeDeletedRows(result.deletedPaths());
+                    showDeleteFailures(result.failedPaths());
+                } catch (Exception e) {
+                    JOptionPane.showMessageDialog(
+                            TracksTable.this,
+                            "Nie udalo sie usunac zaznaczonych plikow.",
+                            "Blad usuwania",
+                            JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        }.execute();
+    }
+
+    private void deleteMetadata(List<Path> deletedPaths) {
+        if (deletedPaths.isEmpty()) {
+            return;
+        }
+
+        try {
+            metadataIndexWriterService.deleteMetadata(deletedPaths);
+        } catch (IOException | SecurityException e) {
+            SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
+                    this,
+                    "Nie udalo sie zaktualizowac indeksu metadanych.",
+                    "Blad zapisu",
+                    JOptionPane.ERROR_MESSAGE));
+        }
+    }
+
+    private void removeDeletedRows(List<Path> deletedPaths) {
+        clearRatingPreview();
+        Set<Path> deletedPathSet = new LinkedHashSet<>(deletedPaths);
+        DefaultTableModel model = (DefaultTableModel) getModel();
+        for (int row = rowPaths.size() - 1; row >= 0; row--) {
+            if (!deletedPathSet.contains(rowPaths.get(row).toAbsolutePath().normalize())) {
+                continue;
+            }
+
+            rowPaths.remove(row);
+            rowMetadata.remove(row);
+            model.removeRow(row);
+        }
+    }
+
+    private void showDeleteFailures(List<Path> failedPaths) {
+        if (failedPaths.isEmpty()) {
+            return;
+        }
+
+        JOptionPane.showMessageDialog(
+                this,
+                "Nie udalo sie usunac plikow: " + failedPaths.size() + ".",
+                "Blad usuwania",
+                JOptionPane.ERROR_MESSAGE);
     }
 
     private void commitMetadataEdits(List<Integer> rows, Map<Tag, Object> values) {
@@ -406,6 +564,29 @@ public class TracksTable extends JTable {
 
     List<TrackSort> getCurrentSort() {
         return List.copyOf(currentSort);
+    }
+
+    void selectPath(Path path) {
+        if (path == null) {
+            return;
+        }
+
+        Path normalizedPath = path.toAbsolutePath().normalize();
+        for (int modelRow = 0; modelRow < rowPaths.size(); modelRow++) {
+            if (!normalizedPath.equals(rowPaths.get(modelRow))) {
+                continue;
+            }
+
+            int viewRow = convertRowIndexToView(modelRow);
+            if (viewRow < 0) {
+                return;
+            }
+
+            getSelectionModel().setSelectionInterval(viewRow, viewRow);
+            scrollRectToVisible(getCellRect(viewRow, 0, true));
+            requestFocusInWindow();
+            return;
+        }
     }
 
     private void applyCurrentSort() {
@@ -654,6 +835,9 @@ public class TracksTable extends JTable {
     private record RatingCell(int row, int modelColumn, int rating) {
     }
 
+    private record DeleteResult(List<Path> deletedPaths, List<Path> failedPaths) {
+    }
+
     private class HeaderMouseListener extends MouseAdapter {
         @Override
         public void mousePressed(MouseEvent event) {
@@ -696,6 +880,50 @@ public class TracksTable extends JTable {
         }
         menu.show(event.getComponent(), event.getX(), event.getY());
         return true;
+    }
+
+    private void showContextMenu(MouseEvent event) {
+        int row = rowAtPoint(event.getPoint());
+        if (row < 0) {
+            return;
+        }
+
+        if (!isRowSelected(row)) {
+            setRowSelectionInterval(row, row);
+        }
+
+        TracksTableContextMenu menu = new TracksTableContextMenu(
+                modeler,
+                this::addSelectedToPlaylist,
+                this::setSelectedTitlesToFileNames,
+                this::deleteSelectedFiles,
+                this::editSelectedMetadata);
+        menu.show(event.getComponent(), event.getX(), event.getY());
+    }
+
+    private class TrackMouseListener extends MouseAdapter {
+        @Override
+        public void mousePressed(MouseEvent event) {
+            contextMenuShownOnPress = showContextMenuIfNeeded(event);
+        }
+
+        @Override
+        public void mouseReleased(MouseEvent event) {
+            if (contextMenuShownOnPress) {
+                contextMenuShownOnPress = false;
+                return;
+            }
+
+            showContextMenuIfNeeded(event);
+        }
+
+        private boolean showContextMenuIfNeeded(MouseEvent event) {
+            if (event.isPopupTrigger() || SwingUtilities.isRightMouseButton(event)) {
+                showContextMenu(event);
+                return true;
+            }
+            return false;
+        }
     }
 
     private int sortColumnToClear(MouseEvent event) {

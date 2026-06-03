@@ -38,7 +38,7 @@ public class ContentPane extends JPanel {
     private boolean treeSelectionActive;
     private boolean indexing;
 
-    public ContentPane(Context context, PlaylistPane playlist) {
+    public ContentPane(Context context, PlaylistPane playlist, PlayerController playerController) {
         super(new GridBagLayout());
         this.context = context;
         this.filterSelection = new TracksFilter.Selection(
@@ -47,7 +47,7 @@ public class ContentPane extends JPanel {
         ContentPaneModeler modeler = new ContentPaneModeler();
         modeler.modelPane(this);
 
-        this.tracksTable = new TracksTable(context, playlist::addTracks);
+        this.tracksTable = new TracksTable(context, playlist, playerController, playlist::addTracks);
         JScrollPane tracksScrollPane = new JScrollPane(tracksTable);
         modeler.modelScrollPane(tracksScrollPane);
         tracksArea.add(tracksScrollPane, TRACKS_CARD);
@@ -74,7 +74,7 @@ public class ContentPane extends JPanel {
         add(tracksArea, c);
         c.gridx = 2;
         c.weightx = 0.2;
-        add(playlist, c);
+        add(createPlaylistBrowserPane(playlist, modeler), c);
 
     }
 
@@ -88,6 +88,17 @@ public class ContentPane extends JPanel {
 
     String getCurrentTreePosition() {
         return fileTree.getCurrentPosition();
+    }
+
+    void goToPath(Path path) {
+        List<IndexItem> files = fileTree.selectContainingDirectory(path);
+        if (files.isEmpty()) {
+            return;
+        }
+
+        treeSelectionActive = true;
+        selectedTreeFiles = List.copyOf(files);
+        loadTrackFiles(selectedTreeFiles, () -> tracksTable.selectPath(path));
     }
 
     private JPanel createFileBrowserPane(FileTree fileTree, TracksFilter tracksFilter, ContentPaneModeler modeler) {
@@ -108,6 +119,26 @@ public class ContentPane extends JPanel {
         c.insets = modeler.tracksFilterInsets();
         fileBrowserPane.add(tracksFilter, c);
         return fileBrowserPane;
+    }
+
+    private JPanel createPlaylistBrowserPane(PlaylistPane playlist, ContentPaneModeler modeler) {
+        JPanel playlistBrowserPane = new JPanel(new GridBagLayout());
+        modeler.modelPlaylistBrowserPane(playlistBrowserPane);
+
+        GridBagConstraints c = new GridBagConstraints();
+        c.gridx = 0;
+        c.gridy = 0;
+        c.fill = GridBagConstraints.BOTH;
+        c.weightx = 1.0;
+        c.weighty = 0.68;
+        c.insets = modeler.currentPlaylistInsets();
+        playlistBrowserPane.add(playlist, c);
+
+        c.gridy = 1;
+        c.weighty = 0.32;
+        c.insets = modeler.savedPlaylistsInsets();
+        playlistBrowserPane.add(new SavedPlaylistsPane(context, playlist), c);
+        return playlistBrowserPane;
     }
 
     private void showSelectedTreeFiles(List<IndexItem> files) {
@@ -157,8 +188,15 @@ public class ContentPane extends JPanel {
     }
 
     private void loadTrackFiles(List<IndexItem> files) {
+        loadTrackFiles(files, null);
+    }
+
+    private void loadTrackFiles(List<IndexItem> files, Runnable loadedCallback) {
         if (files == null || files.isEmpty()) {
             tracksTable.showMappedFiles(files);
+            if (loadedCallback != null) {
+                loadedCallback.run();
+            }
             showTracks();
             return;
         }
@@ -166,7 +204,12 @@ public class ContentPane extends JPanel {
         showLoadingProgress(0, files.size());
         tracksTable.showMappedFiles(
                 files,
-                this::showTracks,
+                () -> {
+                    showTracks();
+                    if (loadedCallback != null) {
+                        loadedCallback.run();
+                    }
+                },
                 (processedFiles, totalFiles) ->
                         SwingUtilities.invokeLater(() -> showLoadingProgress(processedFiles, totalFiles)),
                 () -> SwingUtilities.invokeLater(this::showTracks));

@@ -3,6 +3,7 @@ package pl.khuzzuk.ui;
 import javax.swing.JTable;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JLabel;
+import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
 import javax.swing.ListSelectionModel;
 import javax.swing.Icon;
@@ -38,7 +39,19 @@ class TracksTableModeler {
         menu.setBorder(UiTheme.lineBorder());
     }
 
+    void modelContextMenu(JPopupMenu menu) {
+        menu.setBackground(UiTheme.SURFACE);
+        menu.setBorder(UiTheme.lineBorder());
+    }
+
     void modelColumnMenuItem(JCheckBoxMenuItem item) {
+        item.setFont(UiTheme.BODY_FONT);
+        item.setForeground(UiTheme.INK);
+        item.setBackground(UiTheme.SURFACE);
+        item.setBorder(UiTheme.empty(5, 10, 5, 10));
+    }
+
+    void modelContextMenuItem(JMenuItem item) {
         item.setFont(UiTheme.BODY_FONT);
         item.setForeground(UiTheme.INK);
         item.setBackground(UiTheme.SURFACE);

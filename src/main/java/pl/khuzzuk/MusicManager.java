@@ -11,6 +11,8 @@ import pl.khuzzuk.metadata.MetadataIndexWriterService;
 import pl.khuzzuk.metadata.MetadataWriterService;
 import pl.khuzzuk.metadata.MoodConverter;
 import pl.khuzzuk.metadata.SoundFileMetadataMapper;
+import pl.khuzzuk.playlist.SavedPlaylistMapper;
+import pl.khuzzuk.playlist.SavedPlaylistService;
 import pl.khuzzuk.player.FLACPlayer;
 import pl.khuzzuk.player.MP3Player;
 import pl.khuzzuk.player.OGGPlayer;
@@ -30,6 +32,7 @@ import java.nio.file.Path;
 public class MusicManager {
     private static final Path INDEX_PATH = Path.of("index.dat");
     private static final Path METADATA_INDEX_PATH = Path.of("metadata-index");
+    private static final Path PLAYLISTS_PATH = Path.of("playlists");
     public static Context context;
 
     static void main() {
@@ -61,6 +64,8 @@ public class MusicManager {
                     metadataIndexWriterService);
             IndexReaderService indexReaderService = new IndexReaderService(INDEX_PATH);
             indexReaderService.read();
+            SavedPlaylistService savedPlaylistService =
+                    new SavedPlaylistService(PLAYLISTS_PATH, new SavedPlaylistMapper());
             SoundPlayer soundPlayer = new SoundPlayerRouter(
                     new MP3Player(),
                     new FLACPlayer(),
@@ -74,6 +79,7 @@ public class MusicManager {
                     metadataIndexWriterService,
                     indexService,
                     indexReaderService,
+                    savedPlaylistService,
                     soundPlayer);
         } catch (IOException e) {
             JOptionPane.showMessageDialog(

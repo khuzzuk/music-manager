@@ -30,6 +30,19 @@ For documentation work, use:
 
 - `docs/codex-documentation-prompt.md`
 
+When adding or materially changing application features, use the Codex skill:
+
+- `.codex/skills/document-added-features`
+
+That skill documents implemented feature behavior for future Codex sessions.
+Also read `docs/codex-documentation-prompt.md` and add or update the relevant
+feature documentation under `docs/`.
+
+When working on track table actions, metadata editor UI, track columns, or
+delete-file behavior, read:
+
+- `docs/track-management-ui-codex.md`
+
 When working on settings-related code, read:
 
 - `docs/settings-service-codex.md`

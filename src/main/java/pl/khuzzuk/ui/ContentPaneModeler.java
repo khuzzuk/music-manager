@@ -22,6 +22,11 @@ class ContentPaneModeler {
         fileBrowserPane.setBackground(UiTheme.BACKGROUND);
     }
 
+    void modelPlaylistBrowserPane(JPanel playlistBrowserPane) {
+        playlistBrowserPane.setOpaque(false);
+        playlistBrowserPane.setBackground(UiTheme.BACKGROUND);
+    }
+
     void modelScrollPane(JScrollPane scrollPane) {
         UiTheme.modelScrollPane(scrollPane);
     }
@@ -35,6 +40,14 @@ class ContentPaneModeler {
     }
 
     Insets tracksFilterInsets() {
+        return new Insets(4, 0, 0, 0);
+    }
+
+    Insets currentPlaylistInsets() {
+        return new Insets(0, 0, 4, 0);
+    }
+
+    Insets savedPlaylistsInsets() {
         return new Insets(4, 0, 0, 0);
     }
 

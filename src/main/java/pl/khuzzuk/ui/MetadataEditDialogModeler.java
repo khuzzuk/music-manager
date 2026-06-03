@@ -37,6 +37,12 @@ class MetadataEditDialogModeler {
         label.setForeground(UiTheme.ACCENT_DARK);
     }
 
+    void modelPathLabel(JLabel label) {
+        label.setFont(UiTheme.BODY_FONT);
+        label.setForeground(UiTheme.MUTED_INK);
+        label.setBorder(UiTheme.empty(0, 4, 10, 4));
+    }
+
     void modelEditor(JComponent editor) {
         editor.setFont(UiTheme.BODY_FONT);
         editor.setForeground(UiTheme.INK);

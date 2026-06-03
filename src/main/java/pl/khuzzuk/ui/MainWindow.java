@@ -35,7 +35,8 @@ public class MainWindow extends JFrame {
         setLayout(new BorderLayout(5, 5));
         playlistPane = new PlaylistPane(context);
         PlayerController playerController = new PlayerController(context.soundPlayer(), playlistPane);
-        contentPane = new ContentPane(context, playlistPane);
+        contentPane = new ContentPane(context, playlistPane, playerController);
+        playlistPane.setGoToPathConsumer(contentPane::goToPath);
         add(contentPane, BorderLayout.CENTER);
         PlayerPane playerPane = new PlayerPane(playerController);
         JPanel playerPaneContainer = new JPanel(new BorderLayout());

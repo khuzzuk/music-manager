@@ -12,6 +12,7 @@ public class SoundFileMetadataUpdateMapper {
     public void setValue(SoundFileMetadata metadata, Tag tag, Object value) {
         switch (tag) {
             case FORMAT -> metadata.setFormat(toFormat(value));
+            case FILE_NAME -> metadata.setFileName(toText(value));
             case RATING -> metadata.setRating(toRating(value));
             case DURATION -> metadata.setDurationSeconds(toDurationSeconds(value));
             case TITLE -> metadata.setTitle(toText(value));

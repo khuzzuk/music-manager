@@ -22,6 +22,7 @@ class SettingsToPropertiesMapperTest {
                         new TrackColumn(Tag.TITLE, 250),
                         new TrackColumn(Tag.ALBUM, 180),
                         new TrackColumn(Tag.RATING, 70),
+                        new TrackColumn(Tag.FILE_NAME, 240),
                         new TrackColumn(Tag.DURATION, 80),
                         new TrackColumn(Tag.COMPOSER, 160),
                         new TrackColumn(Tag.MOOD, 120),

@@ -5,6 +5,9 @@ import pl.khuzzuk.player.SoundPlayer;
 
 import javax.swing.JOptionPane;
 import java.awt.Component;
+import java.nio.file.Path;
+import java.util.Collection;
+import java.util.Objects;
 
 public class PlayerController {
     private final SoundPlayer soundPlayer;
@@ -91,6 +94,24 @@ public class PlayerController {
         soundPlayer.stop();
         playing = false;
         paused = false;
+    }
+
+    public void stopIfActiveSoundFile(Collection<Path> paths) {
+        if (activeSoundFile == null || paths == null || paths.isEmpty()) {
+            return;
+        }
+
+        Path activePath = Path.of(activeSoundFile.path()).toAbsolutePath().normalize();
+        boolean activeSelected = paths.stream()
+                .filter(Objects::nonNull)
+                .map(path -> path.toAbsolutePath().normalize())
+                .anyMatch(activePath::equals);
+        if (!activeSelected) {
+            return;
+        }
+
+        stop();
+        activeSoundFile = null;
     }
 
     private boolean playNextTrack() {

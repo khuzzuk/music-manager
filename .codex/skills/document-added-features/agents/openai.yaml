@@ -1,0 +1,7 @@
+interface:
+  display_name: "Document Added Features"
+  short_description: "Document new app features as Codex context"
+  default_prompt: "Use $document-added-features to document the feature I just added to this application."
+
+policy:
+  allow_implicit_invocation: true

@@ -6,6 +6,7 @@ import pl.khuzzuk.metadata.MetadataIndexReaderService;
 import pl.khuzzuk.metadata.MetadataIndexWriterService;
 import pl.khuzzuk.metadata.MetadataReaderService;
 import pl.khuzzuk.metadata.MetadataWriterService;
+import pl.khuzzuk.playlist.SavedPlaylistService;
 import pl.khuzzuk.player.SoundPlayer;
 import pl.khuzzuk.settings.SettingsService;
 
@@ -17,5 +18,6 @@ public record Context(
         MetadataIndexWriterService metadataIndexWriterService,
         IndexService indexService,
         IndexReaderService indexReaderService,
+        SavedPlaylistService savedPlaylistService,
         SoundPlayer soundPlayer) {
 }

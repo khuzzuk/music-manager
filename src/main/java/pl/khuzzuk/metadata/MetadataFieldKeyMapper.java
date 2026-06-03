@@ -6,6 +6,7 @@ public class MetadataFieldKeyMapper {
     public FieldKey toFieldKey(Tag tag) {
         return switch (tag) {
             case FORMAT -> null;
+            case FILE_NAME -> null;
             case DURATION -> null;
             case TITLE -> FieldKey.TITLE;
             case DATE -> FieldKey.RECORDINGDATE;
