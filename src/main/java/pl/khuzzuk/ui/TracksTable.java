@@ -17,7 +17,9 @@ import pl.khuzzuk.settings.TrackSortDirection;
 
 import javax.swing.AbstractAction;
 import javax.swing.Action;
+import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JOptionPane;
+import javax.swing.JPopupMenu;
 import javax.swing.JTable;
 import javax.swing.RowSorter;
 import javax.swing.KeyStroke;
@@ -34,6 +36,7 @@ import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -53,6 +56,8 @@ public class TracksTable extends JTable {
     private final RowSorterListener sortListener = ignored -> rememberCurrentSort();
     private final List<Path> rowPaths = new ArrayList<>();
     private final List<SoundFileMetadata> rowMetadata = new ArrayList<>();
+    private final Map<Tag, Integer> columnWidths = new EnumMap<>(Tag.class);
+    private final TracksTableModeler modeler = new TracksTableModeler();
     private List<TrackColumn> columns;
     private List<TrackSort> currentSort;
     private RowSorter<?> observedSorter;
@@ -60,6 +65,8 @@ public class TracksTable extends JTable {
     private int previewModelColumn = -1;
     private boolean updatingModel;
     private boolean replacingModel;
+    private boolean columnMenuShownOnPress;
+    private int sortColumnToClear = -1;
 
     public TracksTable(Context context, Consumer<List<SoundFileMetadata>> selectedTracksConsumer) {
         this.settingsService = context.settingsService();
@@ -73,9 +80,9 @@ public class TracksTable extends JTable {
         this.columns = configuredColumns == null || configuredColumns.isEmpty()
                 ? SettingsToPropertiesMapper.DEFAULT_TRACK_COLUMNS
                 : List.copyOf(configuredColumns);
-        getTableHeader().addMouseListener(new SaveColumnsListener());
+        rememberConfiguredColumnWidths();
+        getTableHeader().addMouseListener(new HeaderMouseListener());
         setFocusTraversalKeysEnabled(false);
-        TracksTableModeler modeler = new TracksTableModeler();
         modeler.modelTable(this);
         RatingMouseListener ratingMouseListener = new RatingMouseListener();
         addMouseMotionListener(ratingMouseListener);
@@ -144,6 +151,27 @@ public class TracksTable extends JTable {
             rowMetadata.add(loadedTrack);
             model.addRow(columns.stream()
                     .map(column -> column.tag().getValue(loadedTrack))
+                    .toArray());
+        }
+
+        replacingModel = true;
+        try {
+            setModel(model);
+            applyColumnWidths();
+            applyCurrentSort();
+            installSortListener();
+        } finally {
+            replacingModel = false;
+        }
+        repaint();
+    }
+
+    private void refreshLoadedRows() {
+        DefaultTableModel model = createTableModel();
+
+        for (SoundFileMetadata metadata : rowMetadata) {
+            model.addRow(columns.stream()
+                    .map(column -> column.tag().getValue(metadata))
                     .toArray());
         }
 
@@ -626,11 +654,122 @@ public class TracksTable extends JTable {
     private record RatingCell(int row, int modelColumn, int rating) {
     }
 
-    private class SaveColumnsListener extends MouseAdapter {
+    private class HeaderMouseListener extends MouseAdapter {
+        @Override
+        public void mousePressed(MouseEvent event) {
+            columnMenuShownOnPress = showColumnMenu(event);
+            sortColumnToClear = sortColumnToClear(event);
+        }
+
         @Override
         public void mouseReleased(MouseEvent event) {
-            saveColumns();
+            if (columnMenuShownOnPress) {
+                columnMenuShownOnPress = false;
+                return;
+            }
+            if (event.isPopupTrigger() || SwingUtilities.isRightMouseButton(event)) {
+                showColumnMenu(event);
+            } else {
+                saveColumns();
+            }
         }
+
+        @Override
+        public void mouseClicked(MouseEvent event) {
+            clearSortOnThirdClick(event);
+        }
+    }
+
+    private boolean showColumnMenu(MouseEvent event) {
+        if (!event.isPopupTrigger() && !SwingUtilities.isRightMouseButton(event)) {
+            return false;
+        }
+
+        JPopupMenu menu = new JPopupMenu();
+        modeler.modelColumnMenu(menu);
+        for (Tag tag : Tag.values()) {
+            JCheckBoxMenuItem item = new JCheckBoxMenuItem(tag.label(), isColumnVisible(tag));
+            modeler.modelColumnMenuItem(item);
+            item.setEnabled(!item.isSelected() || columns.size() > 1);
+            item.addActionListener(ignored -> setColumnVisible(tag, item.isSelected()));
+            menu.add(item);
+        }
+        menu.show(event.getComponent(), event.getX(), event.getY());
+        return true;
+    }
+
+    private int sortColumnToClear(MouseEvent event) {
+        if (!SwingUtilities.isLeftMouseButton(event)) {
+            return -1;
+        }
+
+        int viewColumn = getTableHeader().columnAtPoint(event.getPoint());
+        if (viewColumn < 0) {
+            return -1;
+        }
+
+        int modelColumn = convertColumnIndexToModel(viewColumn);
+        RowSorter<?> sorter = getRowSorter();
+        if (sorter == null || sorter.getSortKeys().isEmpty()) {
+            return -1;
+        }
+
+        RowSorter.SortKey primarySort = sorter.getSortKeys().getFirst();
+        return primarySort.getColumn() == modelColumn && primarySort.getSortOrder() == SortOrder.DESCENDING
+                ? modelColumn
+                : -1;
+    }
+
+    private void clearSortOnThirdClick(MouseEvent event) {
+        if (sortColumnToClear < 0 || !SwingUtilities.isLeftMouseButton(event)) {
+            sortColumnToClear = -1;
+            return;
+        }
+
+        int viewColumn = getTableHeader().columnAtPoint(event.getPoint());
+        if (viewColumn >= 0 && convertColumnIndexToModel(viewColumn) == sortColumnToClear) {
+            clearSortColumn(sortColumnToClear);
+        }
+        sortColumnToClear = -1;
+    }
+
+    private void clearSortColumn(int modelColumn) {
+        RowSorter<?> sorter = getRowSorter();
+        if (sorter == null) {
+            return;
+        }
+
+        sorter.setSortKeys(sorter.getSortKeys().stream()
+                .filter(sortKey -> sortKey.getColumn() != modelColumn)
+                .toList());
+    }
+
+    private boolean isColumnVisible(Tag tag) {
+        return columns.stream().anyMatch(column -> column.tag() == tag);
+    }
+
+    private void setColumnVisible(Tag tag, boolean visible) {
+        rememberCurrentColumnWidths();
+
+        List<TrackColumn> updatedColumns = new ArrayList<>(columns);
+        if (visible) {
+            if (!isColumnVisible(tag)) {
+                updatedColumns.add(new TrackColumn(tag, widthFor(tag)));
+            }
+        } else {
+            updatedColumns.removeIf(column -> column.tag() == tag);
+        }
+
+        if (updatedColumns.isEmpty()) {
+            return;
+        }
+
+        columns = List.copyOf(updatedColumns);
+        currentSort = currentSort.stream()
+                .filter(sort -> isColumnVisible(sort.tag()))
+                .toList();
+        refreshLoadedRows();
+        saveColumns();
     }
 
     private void saveColumns() {
@@ -641,6 +780,7 @@ public class TracksTable extends JTable {
             currentColumns.add(new TrackColumn((Tag) identifier, columnModel.getColumn(i).getWidth()));
         }
         columns = List.copyOf(currentColumns);
+        currentColumns.forEach(column -> columnWidths.put(column.tag(), column.width()));
 
         Settings settings = settingsService.getSettings();
         Settings newSettings = new Settings(
@@ -655,7 +795,7 @@ public class TracksTable extends JTable {
                 settings.indexedPaths(),
                 settings.lastChoosenPath(),
                 currentColumns,
-                settings.trackSort(),
+                currentSort,
                 settings.lastTracksFilterTag());
         try {
             settingsService.saveSettings(newSettings);
@@ -666,5 +806,29 @@ public class TracksTable extends JTable {
                     "Blad zapisu",
                     JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    private void rememberConfiguredColumnWidths() {
+        for (TrackColumn column : SettingsToPropertiesMapper.DEFAULT_TRACK_COLUMNS) {
+            columnWidths.put(column.tag(), column.width());
+        }
+        for (TrackColumn column : columns) {
+            columnWidths.put(column.tag(), column.width());
+        }
+    }
+
+    private void rememberCurrentColumnWidths() {
+        TableColumnModel columnModel = getColumnModel();
+        for (int i = 0; i < columnModel.getColumnCount(); i++) {
+            Object identifier = columnModel.getColumn(i).getIdentifier();
+            if (identifier instanceof Tag tag) {
+                columnWidths.put(tag, columnModel.getColumn(i).getWidth());
+            }
+        }
+    }
+
+    private int widthFor(Tag tag) {
+        Integer width = columnWidths.get(tag);
+        return width == null ? 120 : width;
     }
 }
