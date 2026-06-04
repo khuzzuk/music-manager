@@ -6,7 +6,6 @@ import pl.khuzzuk.metadata.MetadataIndexReaderService;
 import pl.khuzzuk.metadata.MetadataIndexWriterService;
 import pl.khuzzuk.metadata.MetadataWriterService;
 import pl.khuzzuk.metadata.SoundFileMetadata;
-import pl.khuzzuk.metadata.SoundFileMetadataUpdateMapper;
 import pl.khuzzuk.metadata.Tag;
 import pl.khuzzuk.settings.Settings;
 import pl.khuzzuk.settings.SettingsService;
@@ -21,11 +20,10 @@ import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPopupMenu;
 import javax.swing.JTable;
-import javax.swing.RowSorter;
 import javax.swing.KeyStroke;
+import javax.swing.RowSorter;
 import javax.swing.SortOrder;
 import javax.swing.SwingUtilities;
-import javax.swing.SwingWorker;
 import javax.swing.event.RowSorterListener;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableColumnModel;
@@ -35,7 +33,6 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -54,12 +51,12 @@ public class TracksTable extends JTable {
     private final SettingsService settingsService;
     private final MetadataWriterService metadataWriterService;
     private final MetadataIndexReaderService metadataIndexReaderService;
-    private final MetadataIndexWriterService metadataIndexWriterService;
     private final TracksTableController controller;
     private final PlaylistPane playlistPane;
     private final PlayerController playerController;
     private final Consumer<List<SoundFileMetadata>> selectedTracksConsumer;
-    private final SoundFileMetadataUpdateMapper soundFileMetadataUpdateMapper = new SoundFileMetadataUpdateMapper();
+    private final TracksTableMetadataEditor metadataEditor;
+    private final TracksTableFileDeleter fileDeleter;
     private final RowSorterListener sortListener = ignored -> rememberCurrentSort();
     private final List<Path> rowPaths = new ArrayList<>();
     private final List<SoundFileMetadata> rowMetadata = new ArrayList<>();
@@ -84,11 +81,25 @@ public class TracksTable extends JTable {
         this.settingsService = context.settingsService();
         this.metadataWriterService = context.metadataWriterService();
         this.metadataIndexReaderService = context.metadataIndexReaderService();
-        this.metadataIndexWriterService = context.metadataIndexWriterService();
+        MetadataIndexWriterService metadataIndexWriterService = context.metadataIndexWriterService();
         this.controller = new TracksTableController(context);
         this.playlistPane = playlistPane;
         this.playerController = playerController;
         this.selectedTracksConsumer = selectedTracksConsumer;
+        this.metadataEditor = new TracksTableMetadataEditor(
+                this,
+                metadataWriterService,
+                metadataIndexWriterService,
+                rowPaths,
+                rowMetadata,
+                () -> columns,
+                this::setModelValue);
+        this.fileDeleter = new TracksTableFileDeleter(
+                this,
+                metadataIndexWriterService,
+                this::setEnabled,
+                this::clearRatingPreview,
+                this::removeDeletedRows);
         this.currentSort = List.copyOf(context.settingsService().getSettings().trackSort());
         List<TrackColumn> configuredColumns = context.settingsService().getSettings().trackColumns();
         this.columns = configuredColumns == null || configuredColumns.isEmpty()
@@ -239,7 +250,7 @@ public class TracksTable extends JTable {
                     return;
                 }
 
-                super.setValueAt(commitFieldEdit(row, tag, value), row, column);
+                super.setValueAt(metadataEditor.commitFieldEdit(row, tag, value), row, column);
             }
         };
     }
@@ -308,7 +319,7 @@ public class TracksTable extends JTable {
                 continue;
             }
 
-            if (!commitMetadataEdit(modelRow, Tag.TITLE, metadata.fileName())) {
+            if (!metadataEditor.commitMetadataEdit(modelRow, Tag.TITLE, metadata.fileName())) {
                 return;
             }
         }
@@ -338,7 +349,7 @@ public class TracksTable extends JTable {
         }
 
         MetadataEditDialog.showDialog(this, selectedMetadata, writableTags, metadataIndexReaderService)
-                .ifPresent(values -> commitMetadataEdits(modelRows, values));
+                .ifPresent(values -> metadataEditor.commitMetadataEdits(modelRows, values));
     }
 
     private void deleteSelectedFiles() {
@@ -363,7 +374,7 @@ public class TracksTable extends JTable {
 
         playerController.stopIfActiveSoundFile(selectedPaths);
         playlistPane.removeSoundFiles(selectedPaths);
-        deleteFilesInBackground(selectedPaths);
+        fileDeleter.deleteFilesInBackground(selectedPaths);
     }
 
     private List<Path> selectedPaths() {
@@ -388,62 +399,7 @@ public class TracksTable extends JTable {
         return List.copyOf(modelRows);
     }
 
-    private void deleteFilesInBackground(List<Path> selectedPaths) {
-        setEnabled(false);
-        new SwingWorker<DeleteResult, Void>() {
-            @Override
-            protected DeleteResult doInBackground() {
-                List<Path> deletedPaths = new ArrayList<>();
-                List<Path> failedPaths = new ArrayList<>();
-                for (Path path : selectedPaths) {
-                    try {
-                        Files.delete(path);
-                        deletedPaths.add(path);
-                    } catch (IOException | SecurityException e) {
-                        failedPaths.add(path);
-                    }
-                }
-
-                deleteMetadata(deletedPaths);
-                return new DeleteResult(deletedPaths, failedPaths);
-            }
-
-            @Override
-            protected void done() {
-                setEnabled(true);
-                try {
-                    DeleteResult result = get();
-                    removeDeletedRows(result.deletedPaths());
-                    showDeleteFailures(result.failedPaths());
-                } catch (Exception e) {
-                    JOptionPane.showMessageDialog(
-                            TracksTable.this,
-                            "Nie udalo sie usunac zaznaczonych plikow.",
-                            "Blad usuwania",
-                            JOptionPane.ERROR_MESSAGE);
-                }
-            }
-        }.execute();
-    }
-
-    private void deleteMetadata(List<Path> deletedPaths) {
-        if (deletedPaths.isEmpty()) {
-            return;
-        }
-
-        try {
-            metadataIndexWriterService.deleteMetadata(deletedPaths);
-        } catch (IOException | SecurityException e) {
-            SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
-                    this,
-                    "Nie udalo sie zaktualizowac indeksu metadanych.",
-                    "Blad zapisu",
-                    JOptionPane.ERROR_MESSAGE));
-        }
-    }
-
     private void removeDeletedRows(List<Path> deletedPaths) {
-        clearRatingPreview();
         Set<Path> deletedPathSet = new LinkedHashSet<>(deletedPaths);
         DefaultTableModel model = (DefaultTableModel) getModel();
         for (int row = rowPaths.size() - 1; row >= 0; row--) {
@@ -455,97 +411,6 @@ public class TracksTable extends JTable {
             rowMetadata.remove(row);
             model.removeRow(row);
         }
-    }
-
-    private void showDeleteFailures(List<Path> failedPaths) {
-        if (failedPaths.isEmpty()) {
-            return;
-        }
-
-        JOptionPane.showMessageDialog(
-                this,
-                "Nie udalo sie usunac plikow: " + failedPaths.size() + ".",
-                "Blad usuwania",
-                JOptionPane.ERROR_MESSAGE);
-    }
-
-    private void commitMetadataEdits(List<Integer> rows, Map<Tag, Object> values) {
-        for (int row : rows) {
-            commitMetadataEdits(row, values);
-        }
-    }
-
-    private void commitMetadataEdits(int row, Map<Tag, Object> values) {
-        for (Map.Entry<Tag, Object> entry : values.entrySet()) {
-            if (!commitMetadataEdit(row, entry.getKey(), entry.getValue())) {
-                return;
-            }
-        }
-    }
-
-    private boolean commitMetadataEdit(int row, Tag tag, Object value) {
-        SoundFileMetadata metadata = rowMetadata.get(row);
-        Object currentValue = tag.getValue(metadata);
-        if (!hasChanged(tag, currentValue, value)) {
-            return true;
-        }
-
-        Path path = rowPaths.get(row);
-        try {
-            if (tag == Tag.RATING) {
-                metadataWriterService.writeRating(path, toRating(value));
-            } else {
-                metadataWriterService.writeTag(path, tag, normalizeValue(value));
-            }
-        } catch (IOException | SecurityException | IllegalArgumentException e) {
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Nie udalo sie zapisac pola: " + tag.label() + ".",
-                    "Blad zapisu",
-                    JOptionPane.ERROR_MESSAGE);
-            return false;
-        }
-
-        soundFileMetadataUpdateMapper.setValue(metadata, tag, value);
-        updateVisibleCell(row, tag, tag.getValue(metadata));
-        writeMetadataIndex(metadata);
-        return true;
-    }
-
-    private boolean hasChanged(Tag tag, Object currentValue, Object newValue) {
-        if (tag == Tag.RATING) {
-            return toRating(currentValue) != toRating(newValue);
-        }
-
-        String oldValue = normalizeValue(currentValue);
-        String value = normalizeValue(newValue);
-        return !Objects.equals(oldValue, value);
-    }
-
-    private int toRating(Object value) {
-        if (value instanceof Number number) {
-            return Math.clamp(number.intValue(), 0, 10);
-        }
-        if (value == null || value.toString().isBlank()) {
-            return 0;
-        }
-
-        return Math.clamp(Integer.parseInt(value.toString().trim()), 0, 10);
-    }
-
-    private void updateVisibleCell(int row, Tag tag, Object value) {
-        int column = -1;
-        for (int i = 0; i < columns.size(); i++) {
-            if (columns.get(i).tag() == tag) {
-                column = i;
-                break;
-            }
-        }
-        if (column < 0 || column >= getModel().getColumnCount()) {
-            return;
-        }
-
-        setModelValue(row, column, value);
     }
 
     private void applyColumnWidths() {
@@ -757,49 +622,11 @@ public class TracksTable extends JTable {
     }
 
     private void commitRating(RatingCell ratingCell) {
-        Path path = rowPaths.get(ratingCell.row());
-        try {
-            metadataWriterService.writeRating(path, ratingCell.rating());
-        } catch (IOException | SecurityException e) {
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Nie udalo sie zapisac ratingu w pliku.",
-                    "Blad zapisu",
-                    JOptionPane.ERROR_MESSAGE);
-            clearRatingPreview();
-            return;
-        }
-
-        SoundFileMetadata metadata = rowMetadata.get(ratingCell.row());
-        soundFileMetadataUpdateMapper.setValue(metadata, Tag.RATING, ratingCell.rating());
-        setModelValue(ratingCell.row(), ratingCell.modelColumn(), ratingCell.rating());
-        writeMetadataIndex(metadata);
-    }
-
-    private Object commitFieldEdit(int row, Tag tag, Object value) {
-        SoundFileMetadata metadata = rowMetadata.get(row);
-        Object currentValue = tag.getValue(metadata);
-        String newValue = normalizeValue(value);
-        String oldValue = normalizeValue(currentValue);
-        if (Objects.equals(oldValue, newValue)) {
-            return currentValue;
-        }
-
-        Path path = rowPaths.get(row);
-        try {
-            metadataWriterService.writeTag(path, tag, newValue);
-        } catch (IOException | SecurityException e) {
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Nie udalo sie zapisac metadanych w pliku.",
-                    "Blad zapisu",
-                    JOptionPane.ERROR_MESSAGE);
-            return currentValue;
-        }
-
-        soundFileMetadataUpdateMapper.setValue(metadata, tag, newValue);
-        writeMetadataIndex(metadata);
-        return newValue;
+        metadataEditor.commitRating(
+                ratingCell.row(),
+                ratingCell.modelColumn(),
+                ratingCell.rating(),
+                this::clearRatingPreview);
     }
 
     private void setModelValue(int row, int column, Object value) {
@@ -811,31 +638,7 @@ public class TracksTable extends JTable {
         }
     }
 
-    private String normalizeValue(Object value) {
-        if (value == null) {
-            return null;
-        }
-
-        String text = value.toString().trim();
-        return text.isEmpty() ? null : text;
-    }
-
-    private void writeMetadataIndex(SoundFileMetadata metadata) {
-        try {
-            metadataIndexWriterService.writeMetadata(metadata);
-        } catch (IOException | SecurityException e) {
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Nie udalo sie zaktualizowac indeksu metadanych.",
-                    "Blad zapisu",
-                    JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
     private record RatingCell(int row, int modelColumn, int rating) {
-    }
-
-    private record DeleteResult(List<Path> deletedPaths, List<Path> failedPaths) {
     }
 
     private class HeaderMouseListener extends MouseAdapter {

@@ -9,7 +9,8 @@ import java.awt.Component;
 
 class PlaylistPaneModeler {
     void modelPane(JScrollPane pane) {
-        pane.setBorder(UiTheme.panelPadding(0, 0, 0, 0));
+        pane.setBorder(UiTheme.roundedLineBorder());
+        pane.setOpaque(false);
         pane.getViewport().setBackground(UiTheme.DARK_PANEL_ALT);
     }
 

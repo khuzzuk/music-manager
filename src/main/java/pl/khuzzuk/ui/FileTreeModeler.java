@@ -17,7 +17,7 @@ class FileTreeModeler {
         tree.setForeground(UiTheme.INK);
         tree.setFont(UiTheme.BODY_FONT);
         tree.setRowHeight(28);
-        tree.setBorder(UiTheme.panelPadding(8, 6, 8, 6));
+        tree.setBorder(UiTheme.roundedPanelPadding(8, 6, 8, 6));
         tree.putClientProperty("JTree.lineStyle", "None");
         UIManager.put("Tree.collapsedIcon", new TreeToggleIcon(false));
         UIManager.put("Tree.expandedIcon", new TreeToggleIcon(true));

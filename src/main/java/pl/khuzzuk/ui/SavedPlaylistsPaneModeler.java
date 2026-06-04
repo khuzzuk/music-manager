@@ -9,7 +9,7 @@ import javax.swing.JScrollPane;
 class SavedPlaylistsPaneModeler {
     void modelPane(JPanel pane) {
         pane.setBackground(UiTheme.DARK_PANEL);
-        pane.setBorder(UiTheme.panelPadding(8, 8, 8, 8));
+        pane.setBorder(UiTheme.roundedPanelPadding(8, 8, 8, 8));
     }
 
     void modelTitle(JLabel title) {
@@ -29,7 +29,8 @@ class SavedPlaylistsPaneModeler {
     }
 
     void modelScrollPane(JScrollPane scrollPane) {
-        scrollPane.setBorder(UiTheme.lineBorder());
+        scrollPane.setBorder(UiTheme.roundedLineBorder());
+        scrollPane.setOpaque(false);
         scrollPane.getViewport().setBackground(UiTheme.DARK_PANEL_ALT);
     }
 

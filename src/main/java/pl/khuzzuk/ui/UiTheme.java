@@ -5,10 +5,16 @@ import javax.swing.JButton;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.UIManager;
+import javax.swing.border.AbstractBorder;
 import javax.swing.border.Border;
+import java.awt.Component;
 import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.Insets;
+import java.awt.RenderingHints;
 
 public final class UiTheme {
     public static final Color BACKGROUND = new Color(238, 235, 228);
@@ -34,6 +40,7 @@ public final class UiTheme {
     public static final Color DIRECTORY_BODY_OPEN = new Color(250, 239, 214);
     public static final Color DIRECTORY_HIGHLIGHT = new Color(255, 252, 246, 135);
     public static final Color RATING_EMPTY = new Color(176, 162, 137);
+    public static final int PANEL_RADIUS = 8;
 
     static final Font BODY_FONT = new Font("Segoe UI", Font.PLAIN, 13);
     static final Font BODY_BOLD_FONT = new Font("Segoe UI", Font.BOLD, 13);
@@ -76,9 +83,13 @@ public final class UiTheme {
         return BorderFactory.createLineBorder(BORDER);
     }
 
-    static Border panelPadding(int top, int left, int bottom, int right) {
+    static Border roundedLineBorder() {
+        return new RoundedLineBorder(BORDER, PANEL_RADIUS);
+    }
+
+    static Border roundedPanelPadding(int top, int left, int bottom, int right) {
         return BorderFactory.createCompoundBorder(
-                lineBorder(),
+                roundedLineBorder(),
                 BorderFactory.createEmptyBorder(top, left, bottom, right));
     }
 
@@ -115,6 +126,16 @@ public final class UiTheme {
         scrollPane.getViewport().setBackground(SURFACE);
     }
 
+    static void modelRoundedScrollPane(JScrollPane scrollPane) {
+        modelRoundedScrollPane(scrollPane, SURFACE);
+    }
+
+    static void modelRoundedScrollPane(JScrollPane scrollPane, Color viewportBackground) {
+        scrollPane.setOpaque(false);
+        scrollPane.setBorder(roundedLineBorder());
+        scrollPane.getViewport().setBackground(viewportBackground);
+    }
+
     static void modelTable(JTable table) {
         table.setFont(BODY_FONT);
         table.setForeground(INK);
@@ -131,5 +152,41 @@ public final class UiTheme {
         table.getTableHeader().setForeground(ACCENT_DARK);
         table.getTableHeader().setBackground(SURFACE_ALT);
         table.getTableHeader().setBorder(lineBorder());
+    }
+
+    private static class RoundedLineBorder extends AbstractBorder {
+        private final Color color;
+        private final int radius;
+
+        private RoundedLineBorder(Color color, int radius) {
+            this.color = color;
+            this.radius = radius;
+        }
+
+        @Override
+        public Insets getBorderInsets(Component component) {
+            return new Insets(1, 1, 1, 1);
+        }
+
+        @Override
+        public Insets getBorderInsets(Component component, Insets insets) {
+            insets.top = 1;
+            insets.left = 1;
+            insets.bottom = 1;
+            insets.right = 1;
+            return insets;
+        }
+
+        @Override
+        public void paintBorder(Component component, Graphics graphics, int x, int y, int width, int height) {
+            Graphics2D graphics2D = (Graphics2D) graphics.create();
+            try {
+                graphics2D.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                graphics2D.setColor(color);
+                graphics2D.drawRoundRect(x, y, width - 1, height - 1, radius, radius);
+            } finally {
+                graphics2D.dispose();
+            }
+        }
     }
 }

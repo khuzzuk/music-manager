@@ -13,8 +13,9 @@ class ContentPaneModeler {
     }
 
     void modelTracksArea(JPanel tracksArea) {
+        tracksArea.setOpaque(false);
         tracksArea.setBackground(UiTheme.BACKGROUND);
-        tracksArea.setBorder(UiTheme.lineBorder());
+        tracksArea.setBorder(UiTheme.empty(0, 0, 0, 0));
     }
 
     void modelFileBrowserPane(JPanel fileBrowserPane) {
@@ -28,7 +29,7 @@ class ContentPaneModeler {
     }
 
     void modelScrollPane(JScrollPane scrollPane) {
-        UiTheme.modelScrollPane(scrollPane);
+        UiTheme.modelRoundedScrollPane(scrollPane);
     }
 
     Insets contentInsets() {
@@ -57,6 +58,7 @@ class ContentPaneModeler {
 
     void modelProgressPanel(JPanel progressPanel) {
         progressPanel.setBackground(UiTheme.SURFACE);
+        progressPanel.setBorder(UiTheme.roundedLineBorder());
     }
 
     void modelProgressLabel(JLabel label) {

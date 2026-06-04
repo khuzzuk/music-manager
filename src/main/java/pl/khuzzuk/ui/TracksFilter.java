@@ -6,7 +6,6 @@ import pl.khuzzuk.metadata.MetadataIndexReaderService;
 import pl.khuzzuk.metadata.Tag;
 
 import javax.swing.DefaultComboBoxModel;
-import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
 import javax.swing.JComboBox;
 import javax.swing.JList;
@@ -15,9 +14,10 @@ import javax.swing.JScrollPane;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
-import java.awt.Component;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.Rectangle;
+import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.util.List;
 import java.util.function.Consumer;
@@ -27,7 +27,7 @@ class TracksFilter extends JPanel {
     private final Consumer<Selection> selectionConsumer;
     private final JComboBox<Tag> fieldComboBox = new JComboBox<>();
     private final DefaultListModel<String> valuesModel = new DefaultListModel<>();
-    private final JList<String> valuesList = new JList<>(valuesModel);
+    private final JList<String> valuesList = new ToggleSelectionList(valuesModel);
     private SwingWorker<List<String>, Void> valuesWorker;
     private boolean loadingValues;
 
@@ -60,7 +60,6 @@ class TracksFilter extends JPanel {
     private void configureFieldComboBox(Tag selectedTag, TracksFilterModeler modeler) {
         fieldComboBox.setModel(new DefaultComboBoxModel<>(Tag.values()));
         fieldComboBox.setSelectedItem(selectedTag == null ? Tag.MOOD : selectedTag);
-        fieldComboBox.setRenderer(new TagListCellRenderer());
         modeler.modelFieldComboBox(fieldComboBox);
     }
 
@@ -148,19 +147,36 @@ class TracksFilter extends JPanel {
         }
     }
 
-    private static class TagListCellRenderer extends DefaultListCellRenderer {
+    private static class ToggleSelectionList extends JList<String> {
+        private ToggleSelectionList(DefaultListModel<String> model) {
+            super(model);
+        }
+
         @Override
-        public Component getListCellRendererComponent(
-                JList<?> list,
-                Object value,
-                int index,
-                boolean isSelected,
-                boolean cellHasFocus) {
-            super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-            if (value instanceof Tag tag) {
-                setText(tag.label());
+        protected void processMouseEvent(MouseEvent event) {
+            if (shouldToggleSelection(event)) {
+                int index = locationToIndex(event.getPoint());
+                removeSelectionInterval(index, index);
+                requestFocusInWindow();
+                event.consume();
+                return;
             }
-            return this;
+            super.processMouseEvent(event);
+        }
+
+        private boolean shouldToggleSelection(MouseEvent event) {
+            if (event.getID() != MouseEvent.MOUSE_PRESSED || !SwingUtilities.isLeftMouseButton(event)
+                    || event.isShiftDown() || event.isControlDown() || event.isMetaDown()) {
+                return false;
+            }
+
+            int index = locationToIndex(event.getPoint());
+            if (index < 0 || !isSelectedIndex(index)) {
+                return false;
+            }
+
+            Rectangle bounds = getCellBounds(index, index);
+            return bounds != null && bounds.contains(event.getPoint());
         }
     }
 }
