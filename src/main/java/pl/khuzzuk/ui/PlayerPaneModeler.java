@@ -34,9 +34,6 @@ class PlayerPaneModeler {
     private static final Dimension PROGRESS_THUMB_SIZE = new Dimension(16, 16);
     private static final Dimension VOLUME_THUMB_SIZE = new Dimension(13, 19);
     private static final int TRACK_SIZE = 6;
-    private static final int PANEL_ARC = 18;
-    private static final int BUTTON_ARC = 12;
-
     void modelPane(JPanel pane) {
         pane.setOpaque(false);
         pane.setBackground(PLAYER_BACKGROUND);
@@ -199,9 +196,21 @@ class PlayerPaneModeler {
             graphics2D.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             graphics2D.setStroke(new BasicStroke(1f));
             graphics2D.setColor(new Color(0, 0, 0, 110));
-            graphics2D.drawRoundRect(x + 1, y + 2, width - 3, height - 5, BUTTON_ARC, BUTTON_ARC);
+            graphics2D.drawRoundRect(
+                    x + 1,
+                    y + 2,
+                    width - 3,
+                    height - 5,
+                    UiTheme.CORNER_RADIUS,
+                    UiTheme.CORNER_RADIUS);
             graphics2D.setColor(UiTheme.DARK_PANEL_LINE);
-            graphics2D.drawRoundRect(x, y, width - 2, height - 3, BUTTON_ARC, BUTTON_ARC);
+            graphics2D.drawRoundRect(
+                    x,
+                    y,
+                    width - 2,
+                    height - 3,
+                    UiTheme.CORNER_RADIUS,
+                    UiTheme.CORNER_RADIUS);
             graphics2D.setColor(UiTheme.ARCHIVE_GOLD_DARK);
             graphics2D.drawLine(x + 9, y + height - 3, x + width - 10, y + height - 3);
             graphics2D.dispose();
@@ -219,7 +228,13 @@ class PlayerPaneModeler {
             boolean pressed = component instanceof JButton button && button.getModel().isPressed();
             int yOffset = pressed ? 1 : 0;
             graphics2D.setColor(new Color(0, 0, 0, pressed ? 95 : 125));
-            graphics2D.fillRoundRect(3, 4, width - 6, height - 7, BUTTON_ARC, BUTTON_ARC);
+            graphics2D.fillRoundRect(
+                    3,
+                    4,
+                    width - 6,
+                    height - 7,
+                    UiTheme.CORNER_RADIUS,
+                    UiTheme.CORNER_RADIUS);
             graphics2D.setPaint(new GradientPaint(
                     0,
                     yOffset,
@@ -227,7 +242,13 @@ class PlayerPaneModeler {
                     0,
                     height,
                     pressed ? new Color(34, 36, 40) : new Color(25, 27, 30)));
-            graphics2D.fillRoundRect(1, yOffset, width - 3, height - 4, BUTTON_ARC, BUTTON_ARC);
+            graphics2D.fillRoundRect(
+                    1,
+                    yOffset,
+                    width - 3,
+                    height - 4,
+                    UiTheme.CORNER_RADIUS,
+                    UiTheme.CORNER_RADIUS);
             graphics2D.setColor(new Color(UiTheme.ARCHIVE_BURGUNDY.getRed(), UiTheme.ARCHIVE_BURGUNDY.getGreen(), UiTheme.ARCHIVE_BURGUNDY.getBlue(), pressed ? 76 : 48));
             graphics2D.drawLine(8, height - 5, width - 9, height - 5);
             graphics2D.dispose();
@@ -247,15 +268,41 @@ class PlayerPaneModeler {
             Graphics2D graphics2D = (Graphics2D) graphics.create();
             graphics2D.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             graphics2D.setColor(PLAYER_PANEL_SHADOW);
-            graphics2D.fillRoundRect(x + 3, y + 5, width - 6, height - 8, PANEL_ARC, PANEL_ARC);
+            graphics2D.fillRoundRect(
+                    x + 3,
+                    y + 5,
+                    width - 6,
+                    height - 8,
+                    UiTheme.CORNER_RADIUS,
+                    UiTheme.CORNER_RADIUS);
             graphics2D.setPaint(new GradientPaint(x, y, PLAYER_PANEL_TOP, x, y + height, PLAYER_PANEL_BOTTOM));
-            graphics2D.fillRoundRect(x, y, width - 2, height - 6, PANEL_ARC, PANEL_ARC);
+            graphics2D.fillRoundRect(
+                    x,
+                    y,
+                    width - 2,
+                    height - 6,
+                    UiTheme.CORNER_RADIUS,
+                    UiTheme.CORNER_RADIUS);
             graphics2D.setColor(PLAYER_PANEL_HIGHLIGHT);
-            graphics2D.drawLine(x + PANEL_ARC, y + 1, x + width - PANEL_ARC - 2, y + 1);
+            graphics2D.drawLine(
+                    x + UiTheme.CORNER_RADIUS,
+                    y + 1,
+                    x + width - UiTheme.CORNER_RADIUS - 2,
+                    y + 1);
             graphics2D.setColor(PLAYER_PANEL_EDGE);
-            graphics2D.drawRoundRect(x, y, width - 2, height - 6, PANEL_ARC, PANEL_ARC);
+            graphics2D.drawRoundRect(
+                    x,
+                    y,
+                    width - 2,
+                    height - 6,
+                    UiTheme.CORNER_RADIUS,
+                    UiTheme.CORNER_RADIUS);
             graphics2D.setColor(UiTheme.ARCHIVE_GOLD_DARK);
-            graphics2D.drawLine(x + PANEL_ARC, y + height - 7, x + width - PANEL_ARC - 2, y + height - 7);
+            graphics2D.drawLine(
+                    x + UiTheme.CORNER_RADIUS,
+                    y + height - 7,
+                    x + width - UiTheme.CORNER_RADIUS - 2,
+                    y + height - 7);
             graphics2D.dispose();
         }
     }

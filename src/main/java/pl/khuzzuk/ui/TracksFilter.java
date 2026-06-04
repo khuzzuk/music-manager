@@ -16,6 +16,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.Graphics;
 import java.awt.Rectangle;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
@@ -50,6 +51,12 @@ class TracksFilter extends JPanel {
         });
         context.indexService().addIndexListener(ignored -> SwingUtilities.invokeLater(this::loadValues));
         loadValues();
+    }
+
+    @Override
+    protected void paintComponent(Graphics graphics) {
+        UiTheme.paintRoundedBackground(this, graphics, getBackground());
+        super.paintComponent(graphics);
     }
 
     Tag getSelectedTag() {

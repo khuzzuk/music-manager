@@ -5,18 +5,15 @@ import pl.khuzzuk.metadata.Tag;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
-import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
-import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.ListCellRenderer;
 import javax.swing.border.Border;
 import javax.swing.plaf.basic.ComboPopup;
 import javax.swing.plaf.basic.BasicComboBoxUI;
 import javax.swing.plaf.basic.BasicComboPopup;
-import javax.swing.plaf.basic.BasicScrollBarUI;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
@@ -26,20 +23,18 @@ import java.awt.Graphics2D;
 import java.awt.GradientPaint;
 import java.awt.Insets;
 import java.awt.Polygon;
-import java.awt.Rectangle;
 import java.awt.RenderingHints;
 
 class TracksFilterModeler {
     private static final int FIELD_HEIGHT = 31;
     private static final int FIELD_ARROW_WIDTH = 32;
-    private static final int SCROLLBAR_WIDTH = 10;
-    private static final int BUTTON_ARC = 10;
     private static final Border FIELD_BORDER = BorderFactory.createCompoundBorder(
-            UiTheme.lineBorder(),
+            UiTheme.roundedLineBorder(),
             UiTheme.empty(0, 8, 0, 2));
     private static final Border CELL_BORDER = UiTheme.empty(0, 8, 0, 8);
 
     void modelPanel(JPanel panel) {
+        panel.setOpaque(false);
         panel.setBackground(UiTheme.SURFACE);
         panel.setBorder(UiTheme.roundedPanelPadding(8, 8, 8, 8));
     }
@@ -69,9 +64,14 @@ class TracksFilterModeler {
     }
 
     void modelScrollPane(JScrollPane scrollPane) {
-        UiTheme.modelRoundedScrollPane(scrollPane);
-        modelScrollBar(scrollPane.getVerticalScrollBar());
-        modelScrollBar(scrollPane.getHorizontalScrollBar());
+        scrollPane.setOpaque(false);
+        scrollPane.setBackground(UiTheme.TRANSPARENT);
+        scrollPane.setBorder(UiTheme.empty(0, 0, 0, 0));
+        scrollPane.setViewportBorder(UiTheme.empty(0, 0, 0, 0));
+        scrollPane.getViewport().setOpaque(false);
+        scrollPane.getViewport().setBackground(UiTheme.TRANSPARENT);
+        UiTheme.modelScrollBar(scrollPane.getVerticalScrollBar());
+        UiTheme.modelScrollBar(scrollPane.getHorizontalScrollBar());
     }
 
     Insets fieldInsets() {
@@ -121,8 +121,8 @@ class TracksFilterModeler {
                     JScrollPane scrollPane = super.createScroller();
                     scrollPane.setBorder(UiTheme.lineBorder());
                     scrollPane.getViewport().setBackground(UiTheme.SURFACE);
-                    modelScrollBar(scrollPane.getVerticalScrollBar());
-                    modelScrollBar(scrollPane.getHorizontalScrollBar());
+                    UiTheme.modelScrollBar(scrollPane.getVerticalScrollBar());
+                    UiTheme.modelScrollBar(scrollPane.getHorizontalScrollBar());
                     return scrollPane;
                 }
             };
@@ -180,7 +180,13 @@ class TracksFilterModeler {
                 int yOffset = pressed ? 1 : 0;
 
                 graphics2D.setColor(new Color(0, 0, 0, 38));
-                graphics2D.fillRoundRect(4, 5 + yOffset, width - 8, height - 10, BUTTON_ARC, BUTTON_ARC);
+                graphics2D.fillRoundRect(
+                        4,
+                        5 + yOffset,
+                        width - 8,
+                        height - 10,
+                        UiTheme.CORNER_RADIUS,
+                        UiTheme.CORNER_RADIUS);
                 graphics2D.setPaint(new GradientPaint(
                         0,
                         yOffset,
@@ -188,9 +194,21 @@ class TracksFilterModeler {
                         0,
                         height,
                         pressed ? new Color(198, 187, 162) : new Color(220, 211, 188)));
-                graphics2D.fillRoundRect(3, 3 + yOffset, width - 7, height - 8, BUTTON_ARC, BUTTON_ARC);
+                graphics2D.fillRoundRect(
+                        3,
+                        3 + yOffset,
+                        width - 7,
+                        height - 8,
+                        UiTheme.CORNER_RADIUS,
+                        UiTheme.CORNER_RADIUS);
                 graphics2D.setColor(UiTheme.BORDER);
-                graphics2D.drawRoundRect(3, 3 + yOffset, width - 8, height - 9, BUTTON_ARC, BUTTON_ARC);
+                graphics2D.drawRoundRect(
+                        3,
+                        3 + yOffset,
+                        width - 8,
+                        height - 9,
+                        UiTheme.CORNER_RADIUS,
+                        UiTheme.CORNER_RADIUS);
                 graphics2D.setColor(UiTheme.ACCENT_DARK);
                 graphics2D.fillPolygon(chevron(width / 2, height / 2 + yOffset));
             } finally {
@@ -207,91 +225,4 @@ class TracksFilterModeler {
         }
     }
 
-    private static void modelScrollBar(JScrollBar scrollBar) {
-        if (scrollBar == null) {
-            return;
-        }
-        scrollBar.setOpaque(false);
-        scrollBar.setBackground(UiTheme.SURFACE);
-        scrollBar.setForeground(UiTheme.ACCENT_DARK);
-        scrollBar.setPreferredSize(new Dimension(SCROLLBAR_WIDTH, SCROLLBAR_WIDTH));
-        scrollBar.setUnitIncrement(12);
-        scrollBar.setBlockIncrement(48);
-        scrollBar.setUI(new FilterScrollBarUi());
-    }
-
-    private static class FilterScrollBarUi extends BasicScrollBarUI {
-        @Override
-        protected void configureScrollBarColors() {
-            thumbColor = UiTheme.ACCENT_DARK;
-            trackColor = UiTheme.SURFACE_ALT;
-        }
-
-        @Override
-        protected JButton createDecreaseButton(int orientation) {
-            return createZeroButton();
-        }
-
-        @Override
-        protected JButton createIncreaseButton(int orientation) {
-            return createZeroButton();
-        }
-
-        @Override
-        protected void paintTrack(Graphics graphics, JComponent component, Rectangle trackBounds) {
-            Graphics2D graphics2D = (Graphics2D) graphics.create();
-            try {
-                graphics2D.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                graphics2D.setColor(UiTheme.SURFACE_ALT);
-                graphics2D.fillRoundRect(
-                        trackBounds.x + 2,
-                        trackBounds.y + 2,
-                        trackBounds.width - 4,
-                        trackBounds.height - 4,
-                        SCROLLBAR_WIDTH,
-                        SCROLLBAR_WIDTH);
-            } finally {
-                graphics2D.dispose();
-            }
-        }
-
-        @Override
-        protected void paintThumb(Graphics graphics, JComponent component, Rectangle thumbBounds) {
-            if (thumbBounds.isEmpty() || !scrollbar.isEnabled()) {
-                return;
-            }
-
-            Graphics2D graphics2D = (Graphics2D) graphics.create();
-            try {
-                graphics2D.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                graphics2D.setColor(UiTheme.SELECTION_STRONG);
-                graphics2D.fillRoundRect(
-                        thumbBounds.x + 2,
-                        thumbBounds.y + 2,
-                        thumbBounds.width - 4,
-                        thumbBounds.height - 4,
-                        SCROLLBAR_WIDTH,
-                        SCROLLBAR_WIDTH);
-                graphics2D.setColor(UiTheme.ACCENT_DARK);
-                graphics2D.drawRoundRect(
-                        thumbBounds.x + 2,
-                        thumbBounds.y + 2,
-                        thumbBounds.width - 5,
-                        thumbBounds.height - 5,
-                        SCROLLBAR_WIDTH,
-                        SCROLLBAR_WIDTH);
-            } finally {
-                graphics2D.dispose();
-            }
-        }
-
-        private JButton createZeroButton() {
-            JButton button = new JButton();
-            button.setPreferredSize(new Dimension(0, 0));
-            button.setMinimumSize(new Dimension(0, 0));
-            button.setMaximumSize(new Dimension(0, 0));
-            button.setBorder(BorderFactory.createEmptyBorder());
-            return button;
-        }
-    }
 }

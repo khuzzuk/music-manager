@@ -18,7 +18,10 @@ import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.Rectangle;
+import java.awt.RenderingHints;
+import java.awt.Shape;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
@@ -56,10 +59,18 @@ public class FileTree extends JTree {
 
     @Override
     protected void paintComponent(Graphics graphics) {
-        graphics.setColor(getBackground());
-        graphics.fillRect(0, 0, getWidth(), getHeight());
-        paintSelectionRows(graphics);
-        super.paintComponent(graphics);
+        Graphics2D graphics2D = (Graphics2D) graphics.create();
+        try {
+            graphics2D.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            Shape clip = UiTheme.roundedShape(this);
+            graphics2D.setColor(getBackground());
+            graphics2D.fill(clip);
+            graphics2D.clip(clip);
+            paintSelectionRows(graphics2D);
+            super.paintComponent(graphics2D);
+        } finally {
+            graphics2D.dispose();
+        }
     }
 
     private void paintSelectionRows(Graphics graphics) {

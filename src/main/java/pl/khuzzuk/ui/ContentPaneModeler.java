@@ -25,11 +25,18 @@ class ContentPaneModeler {
 
     void modelPlaylistBrowserPane(JPanel playlistBrowserPane) {
         playlistBrowserPane.setOpaque(false);
-        playlistBrowserPane.setBackground(UiTheme.BACKGROUND);
+        playlistBrowserPane.setBackground(UiTheme.TRANSPARENT);
     }
 
     void modelScrollPane(JScrollPane scrollPane) {
-        UiTheme.modelRoundedScrollPane(scrollPane);
+        scrollPane.setOpaque(false);
+        scrollPane.setBackground(UiTheme.TRANSPARENT);
+        scrollPane.setBorder(UiTheme.empty(0, 0, 0, 0));
+        scrollPane.setViewportBorder(UiTheme.empty(0, 0, 0, 0));
+        scrollPane.getViewport().setOpaque(false);
+        scrollPane.getViewport().setBackground(UiTheme.TRANSPARENT);
+        UiTheme.modelScrollBar(scrollPane.getVerticalScrollBar());
+        UiTheme.modelScrollBar(scrollPane.getHorizontalScrollBar());
     }
 
     Insets contentInsets() {
@@ -57,6 +64,7 @@ class ContentPaneModeler {
     }
 
     void modelProgressPanel(JPanel progressPanel) {
+        progressPanel.setOpaque(false);
         progressPanel.setBackground(UiTheme.SURFACE);
         progressPanel.setBorder(UiTheme.roundedLineBorder());
     }

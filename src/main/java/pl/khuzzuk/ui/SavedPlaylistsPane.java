@@ -20,6 +20,7 @@ import javax.swing.ListSelectionModel;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.FlowLayout;
+import java.awt.Graphics;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
@@ -69,6 +70,12 @@ class SavedPlaylistsPane extends JPanel {
         add(buttons, BorderLayout.SOUTH);
 
         refreshPlaylists();
+    }
+
+    @Override
+    protected void paintComponent(Graphics graphics) {
+        UiTheme.paintRoundedBackground(this, graphics, getBackground());
+        super.paintComponent(graphics);
     }
 
     private void registerListActions() {

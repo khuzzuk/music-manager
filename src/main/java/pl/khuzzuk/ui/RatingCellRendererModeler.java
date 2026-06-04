@@ -9,7 +9,7 @@ class RatingCellRendererModeler {
         label.setHorizontalAlignment(SwingConstants.CENTER);
         label.setFont(UiTheme.BODY_FONT);
         label.setForeground(UiTheme.ACCENT_DARK);
-        label.setOpaque(true);
+        label.setOpaque(false);
         if (selected) {
             label.setBackground(table.getSelectionBackground());
             label.setForeground(table.getSelectionForeground());

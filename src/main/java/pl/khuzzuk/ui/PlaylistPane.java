@@ -16,6 +16,9 @@ import javax.swing.JScrollPane;
 import javax.swing.SwingUtilities;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.TableColumnModel;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
@@ -53,6 +56,18 @@ public class PlaylistPane extends JScrollPane {
         playlist.addMouseListener(new PlaylistMouseListener());
         setViewportView(playlist);
         restorePlaylist(context.settingsService().getSettings());
+    }
+
+    @Override
+    protected void paintChildren(Graphics graphics) {
+        Graphics2D graphics2D = (Graphics2D) graphics.create();
+        try {
+            graphics2D.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            graphics2D.clip(UiTheme.roundedShape(this));
+            super.paintChildren(graphics2D);
+        } finally {
+            graphics2D.dispose();
+        }
     }
 
     void setGoToPathConsumer(Consumer<Path> goToPathConsumer) {

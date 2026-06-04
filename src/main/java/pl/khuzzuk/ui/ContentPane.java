@@ -15,6 +15,7 @@ import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.SwingUtilities;
 import java.awt.CardLayout;
+import java.awt.Graphics;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.io.IOException;
@@ -264,6 +265,12 @@ public class ContentPane extends JPanel {
             c.fill = GridBagConstraints.HORIZONTAL;
             c.weightx = 1.0;
             add(progressBar, c);
+        }
+
+        @Override
+        protected void paintComponent(Graphics graphics) {
+            UiTheme.paintRoundedBackground(this, graphics, getBackground());
+            super.paintComponent(graphics);
         }
 
         private void updateProgress(String message, int processedFiles, int totalFiles) {

@@ -4,10 +4,9 @@ import pl.khuzzuk.ui.icons.RatingIcon;
 
 import javax.swing.JLabel;
 import javax.swing.JTable;
-import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.Component;
 
-public class RatingCellRenderer extends DefaultTableCellRenderer {
+public class RatingCellRenderer extends TracksTableCellRenderer {
     private final RatingCellRendererModeler modeler = new RatingCellRendererModeler();
 
     @Override
