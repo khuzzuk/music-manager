@@ -28,14 +28,6 @@ import java.util.Objects;
 import java.util.Optional;
 
 public class MetadataEditDialog extends JDialog {
-    private static final List<Tag> SUGGESTED_TAGS = List.of(
-            Tag.ARTIST,
-            Tag.COMPOSER,
-            Tag.CONDUCTOR,
-            Tag.GENRE,
-            Tag.MOOD,
-            Tag.TEMPO,
-            Tag.OCCASION);
     private final MetadataIndexReaderService metadataIndexReaderService;
     private final Map<Tag, JComponent> editors = new EnumMap<>(Tag.class);
     private final Map<Tag, Object> initialValues = new EnumMap<>(Tag.class);
@@ -107,6 +99,7 @@ public class MetadataEditDialog extends JDialog {
             JComponent editor = createEditor(tag, fieldState.initialValue());
             modeler.modelEditor(editor);
             editor.setEnabled(fieldState.editable());
+            modeler.modelFieldState(label, editor, fieldState.editable());
             editors.put(tag, editor);
             initialValues.put(tag, fieldState.initialValue());
             editorBackgrounds.put(tag, editor.getBackground());
@@ -158,7 +151,7 @@ public class MetadataEditDialog extends JDialog {
         }
 
         String text = value == null ? "" : value.toString();
-        if (SUGGESTED_TAGS.contains(tag)) {
+        if (MetadataSuggestionTags.supports(tag)) {
             return new MetadataSuggestionTextField(text, 34, tag, metadataIndexReaderService);
         }
 

@@ -74,6 +74,7 @@ public void addProgressListener(Consumer<IndexProgress> listener)
 public void removeProgressListener(Consumer<IndexProgress> listener)
 public void reindexDirectory(IndexItem directory)
 public void reindexDirectoryChanges(IndexItem directory)
+public void removeIndexedFiles(RootIndexItem root, Collection<Path> paths)
 ```
 
 The constructor injects the output file location, metadata reader, and Lucene
@@ -88,6 +89,10 @@ collected from the saved tree and after each metadata file is processed, and
 under the selected directory. `reindexDirectoryChanges(...)` synchronizes the tree
 but reads metadata only for new or stale files according to the Lucene metadata
 index, and removes metadata documents for files no longer present in the tree.
+`removeIndexedFiles(...)` removes specific sound-file paths from the supplied
+current root tree, writes `index.dat`, and notifies index listeners. It does not
+delete files from disk and does not update the Lucene metadata index; callers such
+as `TracksTableFileDeleter` handle those steps separately.
 
 ### index(RootIndexItem, List<Path>)
 
@@ -370,6 +375,8 @@ When changing this area, keep these rules:
   for fail-fast behavior.
 - Preserve configured index-file writing from `index(...)` unless persistence is
   moved to a dedicated component.
+- Keep `removeIndexedFiles(...)` limited to sound-file entries and make it save
+  `index.dat` plus notify listeners only when at least one entry was removed.
 - If tests are added, use temporary directories and files instead of project-local
   real paths.
 
@@ -406,6 +413,8 @@ Existing focused tests in `IndexServiceTest` cover:
 - avoiding duplicate root directory nodes while merging;
 - preserving parent links;
 - `hasChildren()` behavior for root, directories, and files.
+- removing specific indexed sound-file entries from both the in-memory tree and
+  persisted `index.dat`, and notifying index listeners after removal.
 
 Existing focused tests in `IndexReaderServiceTest` cover:
 
@@ -460,6 +469,10 @@ tree and updates the Lucene metadata index. Directories, including root, are
 written as `D|escaped-normalized-path`; sound files are written as bare escaped
 normalized paths. Root is written as `D|root` and is preceded by one empty line.
 Unreadable nodes are not persisted.
+`removeIndexedFiles(RootIndexItem, Collection<Path>)` removes matching
+SoundFileIndexItem paths from the supplied current root, rewrites `index.dat`,
+and notifies index listeners. It does not touch files on disk or metadata-index
+documents.
 
 `IndexReaderService` has an `IndexReaderService(Path indexPath)` constructor and
 `read() throws IOException`. It reads `D|...` directory path lines and bare

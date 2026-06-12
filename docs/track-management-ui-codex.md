@@ -22,7 +22,9 @@ has confirmed their removal.
   composition for add-to-playlist, title-from-file-name, delete, and
   metadata-edit actions.
 - `src/main/java/pl/khuzzuk/ui/TracksTableModeler.java` - table, header,
-  column menu, and row context menu styling.
+  column menu, row context menu, and cell editor styling.
+- `src/main/java/pl/khuzzuk/ui/TracksTableCellEditor.java` - direct table cell
+  editor that uses indexed metadata suggestions for supported text tags.
 - `src/main/java/pl/khuzzuk/ui/TracksTableController.java` - background loading
   of metadata for table rows.
 - `src/main/java/pl/khuzzuk/ui/MetadataEditDialog.java` - modal multi-track
@@ -48,13 +50,20 @@ Runtime and generated files:
   `tag:width` entries.
 - `metadata-index/` is updated through `MetadataIndexWriterService` when
   metadata changes or deleted files are removed from the metadata index.
-- `index.dat` is not updated by the delete shortcut; reindexing is currently
-  needed to remove deleted files from the directory index.
+- `index.dat` is updated through `IndexService.removeIndexedFiles(...)` when
+  `TracksTable` successfully deletes sound files from disk.
 
 ## Entry Points
 
 - `Tab` while `TracksTable` is focused adds selected table tracks to the current
   playlist.
+- `F2` while `TracksTable` is focused starts direct editing for the selected
+  editable cell.
+- `Insert` while `FileTree` is focused reindexes the selected directory and
+  reloads `TracksTable` from the restored tree selection after the index update.
+- `Ctrl+Insert` while `FileTree` is focused reindexes only detected changes for
+  the selected directory and also reloads `TracksTable` from the restored tree
+  selection after the index update.
 - `Ctrl+Enter` while `TracksTable` is focused opens `MetadataEditDialog` for the
   selected rows.
 - `Ctrl+Delete` while `TracksTable` is focused asks for confirmation, then
@@ -67,7 +76,9 @@ Runtime and generated files:
 - `Ustaw tytul z nazwy pliku` writes each selected track's `fileName()` value to
   `Tag.TITLE` through the same metadata write path used by table edits, then
   updates the visible cell and metadata index.
-- Direct table cell edits write supported metadata tags immediately.
+- Direct table cell edits write supported metadata tags immediately. Text edits
+  for supported suggestion tags show the same indexed value suggestions as the
+  metadata edit dialog.
 - Rating cells are updated through the rating renderer/editor mouse interaction.
 
 ## Track Columns
@@ -83,6 +94,38 @@ the user-configured columns.
 `MetadataWriterService.canWrite(...)` returns `false` for `FILE_NAME` because
 `MetadataFieldKeyMapper.toFieldKey(FILE_NAME)` returns `null`. The column is
 therefore display-only in `TracksTable`, like format and duration.
+
+## Track Table Cell Editing
+
+`TracksTable` installs `TracksTableCellEditor` for direct table edits after
+`TracksTableModeler.modelTable(...)` applies shared table styling.
+
+Current behavior:
+
+- Editable cells still start editing on double-click.
+- Pressing `F2` starts editing the selected editable cell and focuses the active
+  editor component.
+- The editor reads the visible table column identifier and resolves it to a
+  `Tag`.
+- Tags supported by `MetadataSuggestionTags` use `MetadataSuggestionTextField`
+  and query `MetadataIndexReaderService.suggestValues(...)` as the user types.
+- Other writable text tags use a regular `JTextField`.
+- `Enter` applies the highlighted suggestion when the popup is open; otherwise
+  it commits the cell edit. `Escape` hides the popup when it is open; otherwise
+  it cancels the cell edit. In table cell editing, `Escape` also cancels the
+  edit after hiding the popup, and `TracksTableCellEditor` closes suggestions
+  from both `stopCellEditing()` and `cancelCellEditing()` so popups cannot remain
+  visible after the editor component is removed. `MetadataSuggestionTextField`
+  handles `Up`, `Down`, `Enter`, and `Escape` in `processKeyBinding(...)` so
+  those keys navigate/apply suggestions instead of moving the active `JTable`
+  cell while editing.
+- Suggestion popups size to the visible result count up to eight rows, widen to
+  fit the longest visible suggestion up to a bounded maximum, disable horizontal
+  scrolling, and use `UiTheme`-styled scrollbars only when the result count
+  exceeds the visible row limit.
+
+Keep reusable suggestion tag selection in `MetadataSuggestionTags` so direct
+table edits and `MetadataEditDialog` stay aligned.
 
 ## Metadata Editor Path Label
 
@@ -100,6 +143,31 @@ Current behavior:
 Keep styling in `MetadataEditDialogModeler`; do not put font, color, border, or
 spacing decisions directly into `MetadataEditDialog`.
 
+## Metadata Editor Field States
+
+`MetadataEditDialog.getFieldState(...)` compares each writable tag across the
+selected metadata rows:
+
+- If every selected track has the same normalized value, the editor is enabled
+  and initialized with that common value.
+- If selected tracks have different normalized values, the editor is disabled,
+  initialized empty/default, skipped by `readValues()`, and cannot overwrite
+  mixed values.
+
+The visual distinction between editable and locked fields is applied by
+`MetadataEditDialogModeler.modelFieldState(...)`. Editable fields keep the normal
+surface, ink text, accent label, and text/hand cursor. Locked fields use muted
+label/text colors, a soft alternate surface, a subdued border, and the default
+cursor. Text components also receive `setDisabledTextColor(...)` so disabled
+mixed-value fields remain legible under Swing look-and-feel defaults.
+`RatingEditor` also checks `isEnabled()` in its mouse and keyboard handlers and
+clears hover preview when disabled, so locked mixed-value ratings do not fill
+stars or change value on hover, click, or key input.
+
+Keep all visual state styling in `MetadataEditDialogModeler`. `MetadataEditDialog`
+should only decide whether a field is editable and call the modeler with that
+state.
+
 ## Delete Selected Files Flow
 
 `TracksTable.registerDeleteSelectedFilesAction()` binds `Ctrl+Delete` to
@@ -116,9 +184,14 @@ Flow after the user confirms deletion:
    occurrence of each selected file.
 7. Delete files in a `SwingWorker` with `Files.delete(path)`.
 8. Delete metadata index entries for successfully deleted files.
-9. Remove successfully deleted rows from `rowPaths`, `rowMetadata`, and the
+9. Remove successfully deleted files from the directory index through
+   `IndexService.removeIndexedFiles(...)`, which writes `index.dat` and notifies
+   index listeners so `FileTree` refreshes.
+10. Remove successfully deleted rows from `rowPaths`, `rowMetadata`, and the
    visible table model.
-10. Show an error dialog if any selected files failed to delete.
+11. Show an error dialog if any selected files failed to delete. If disk deletion
+   succeeds but the directory index update fails, keep the table rows removed and
+   show a separate index update error.
 
 File deletion is intentionally off the Swing EDT. UI state updates happen in the
 worker's `done()` method.
@@ -138,18 +211,37 @@ available, otherwise to the previous node.
 The order matters: playback is stopped first, playlist entries are removed
 second, and disk deletion happens third.
 
+## File Tree Reindex Refresh
+
+`FileTree` listens to `IndexService.addIndexListener(...)` and rebuilds its Swing
+tree in `refresh(...)` after successful indexing. The refresh captures the
+previous selected `IndexItem`, replaces the tree model, restores the matching
+selection by path, and then calls `notifySelectedFiles(getSelectionPath())`.
+
+That final notification is important: it causes `ContentPane.showSelectedTreeFiles(...)`
+to reload `TracksTable` from the newly rebuilt index tree, so newly indexed files
+appear after `Insert` or `Ctrl+Insert` without requiring the user to click the
+directory again.
+
 ## Change Contracts
 
 - Keep `TracksTable` format-agnostic; it should work with `Path` and
   `SoundFileMetadata`, not format-specific player classes.
 - Keep row context menu actions wired to the same selected-row methods used by
   keyboard shortcuts so add, edit, and delete behavior stays aligned.
+- Keep table cell editor styling in `TracksTableModeler` and table editing
+  behavior in `TracksTableCellEditor`.
 - Keep the title-from-file-name action in `TracksTable`, not
   `TracksTableContextMenu`, because it depends on selected rows, metadata writes,
   visible table state, and metadata index updates.
 - Keep playback state changes in `PlayerController`, not directly in table UI
   code.
 - Keep playlist node mutation inside `PlaylistPane`.
+- Keep successful `TracksTable` file deletes aligned with both metadata index
+  deletion and directory index removal, otherwise deleted files can reappear when
+  browsing `FileTree`.
+- Keep `FileTree.refresh(...)` notifying the restored selection after an index
+  update so `TracksTable` reflects reindexed directory contents immediately.
 - Keep visual styling for dialogs and UI controls in `*Modeler` classes.
 - When adding a `Tag`, update every exhaustive `switch` on `Tag`, especially
   `MetadataFieldKeyMapper` and `SoundFileMetadataUpdateMapper`.
@@ -163,8 +255,8 @@ second, and disk deletion happens third.
 - Failed deletions are reported only by count, not by path list.
 - Playlist entries are removed before disk deletion. If a file fails to delete,
   it is not restored to the playlist automatically.
-- `index.dat` is not updated by this shortcut. A later reindex is needed to
-  remove deleted files from the file tree index.
+- If file deletion succeeds but writing `index.dat` fails, the row is still
+  removed from the current table view and the user sees an index update error.
 - The table row is removed only after successful file deletion.
 - The metadata editor path label uses HTML text in `JLabel`; very long path
   lists may make the dialog taller and require scrolling.
@@ -185,14 +277,28 @@ Manual checks worth doing in the app:
 - Select one or more rows in `TracksTable`, press `Ctrl+Delete`, cancel, and
   verify nothing changes.
 - Repeat with confirmation and verify table rows disappear only for deleted
-  files.
+  files. Click the same directory in `FileTree` afterward and verify deleted
+  files do not reappear.
 - Add duplicate occurrences of a track to the playlist, delete it from
   `TracksTable`, and verify every playlist occurrence is removed.
 - Start playback for a selected file, delete it, and verify playback stops.
 - Open metadata editing with `Ctrl+Enter` for one and multiple files and verify
   the full path label appears above editable fields.
+- Select multiple files with both matching and mixed metadata values, open the
+  metadata editor, and verify editable fields are visually distinct from locked
+  mixed-value fields.
+- Double-click an editable suggestion-backed column such as artist, composer,
+  conductor, genre, mood, tempo, or occasion in `TracksTable`; type a prefix,
+  verify suggestions appear, then verify `Enter` applies/commits and `Escape`
+  hides/cancels correctly.
+- Select an editable cell in `TracksTable`, press `F2`, and verify editing starts
+  with focus in the cell editor. Repeat on a read-only cell and verify nothing
+  starts editing.
 - Enable/disable the `Nazwa pliku` column through the header menu and verify
   width persistence in `settings.properties`.
+- Add a supported sound file under the selected `FileTree` directory, press
+  `Insert`, and verify it appears in `TracksTable` after indexing finishes
+  without clicking the directory again. Repeat with `Ctrl+Insert`.
 
 ## Minimal Prompt Context
 
@@ -206,8 +312,17 @@ methods. The title-from-file-name action writes each selected track's `fileName(
 to `Tag.TITLE` via the existing metadata write/update/index flow. Ctrl+Delete confirms deletion, stops playback through
 PlayerController when the active file is selected, removes all playlist
 occurrences through PlaylistPane, deletes files in a SwingWorker, removes
-metadata index entries for successful deletions, then removes table rows.
+metadata index entries and directory index entries for successful deletions, then
+removes table rows.
 Tag.FILE_NAME is a read-only column backed by SoundFileMetadata::fileName and
-is part of default track columns. MetadataEditDialog shows full normalized paths
-at the top as a styled label; styling belongs in MetadataEditDialogModeler.
+is part of default track columns. Direct TracksTable edits use
+TracksTableCellEditor; suggestion-backed tags use MetadataSuggestionTextField
+with MetadataIndexReaderService, and Enter/Escape commit or cancel table edits
+when the suggestion popup is closed. After FileTree reindexing via Insert or
+Ctrl+Insert, FileTree restores the selected directory and notifies ContentPane so
+TracksTable reloads from the new index tree. MetadataEditDialog shows full
+normalized paths at the top as a styled label. Multi-file metadata fields are
+enabled only when all selected tracks share the same normalized value; mixed-value
+fields are disabled, skipped on save, and visually muted by
+MetadataEditDialogModeler. Styling belongs in Modeler classes.
 ```

@@ -58,10 +58,21 @@ When working on indexing-related code, read:
 That document describes `IndexService`, `IndexItem`, directory/file/unreadable
 index nodes, traversal behavior, graceful error handling, and known limitations.
 
+When working on application startup, `MusicManager`, or loading-screen behavior,
+read:
+
+- `docs/application-startup-codex.md`
+
+That document describes the startup threading contract, `LoadingScreen` lifecycle,
+service initialization in `MusicManager.initComponents()`, and `Context`
+assembly before showing the main window.
+
 When working on playback-related code, read:
 
 - `docs/sound-player-codex.md`
+- `docs/media-key-playback-codex.md`
 
-That document describes `SoundPlayer`, `MP3Player`, `FLACPlayer`,
+Those documents describe `SoundPlayer`, `MP3Player`, `FLACPlayer`,
 `SoundPlayerRouter`, playback threading, pause/resume, seek/progress behavior,
-MVC boundaries between `PlayerPane` and `PlaylistPane`, and known limitations.
+MVC boundaries between `PlayerPane` and `PlaylistPane`, Windows media key
+handling, and known limitations.

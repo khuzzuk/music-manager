@@ -98,24 +98,41 @@ public class PlayerPane extends JPanel {
     }
 
     public void playPause() {
+        logPlaybackAction("playPause");
         boolean playing = playerController.playPause(this);
         updatePlaybackState(playing);
     }
 
-    private void playNext() {
+    void play() {
+        logPlaybackAction("play");
+        updatePlaybackState(playerController.play(this));
+    }
+
+    void pause() {
+        logPlaybackAction("pause");
+        playerController.pause();
+        updatePlaybackState(false);
+    }
+
+    void playNext() {
         updatePlaybackState(playerController.playNext());
     }
 
-    private void playPrevious() {
+    void playPrevious() {
         updatePlaybackState(playerController.playPrevious());
     }
 
-    private void stop() {
+    void stop() {
+        logPlaybackAction("stop");
         playerController.stop();
         progressTimer.stop();
         progressSlider.setValue(0);
         updateTimeLabels(0, 0);
         setPlayPauseButton(false);
+    }
+
+    private void logPlaybackAction(String action) {
+        System.out.println("[player-pane] action=" + action);
     }
 
     private void updatePlaybackState(boolean playing) {

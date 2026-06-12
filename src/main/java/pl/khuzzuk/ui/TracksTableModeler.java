@@ -2,7 +2,6 @@ package pl.khuzzuk.ui;
 
 import javax.swing.JTable;
 import javax.swing.AbstractButton;
-import javax.swing.DefaultCellEditor;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JLabel;
 import javax.swing.JMenuItem;
@@ -46,9 +45,34 @@ class TracksTableModeler {
         table.setAutoCreateRowSorter(true);
         table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         table.setDefaultRenderer(Object.class, new TracksTableCellRenderer());
-        table.setDefaultEditor(Object.class, new TrackCellEditor());
-        table.setDefaultEditor(Integer.class, new TrackCellEditor());
         modelHeader(table.getTableHeader());
+    }
+
+    void modelCellEditorField(JTextField editorField) {
+        editorField.setOpaque(false);
+        editorField.setFont(UiTheme.BODY_FONT);
+        editorField.setForeground(UiTheme.INK);
+        editorField.setCaretColor(UiTheme.ACCENT_DARK);
+        editorField.setSelectionColor(UiTheme.SELECTION);
+        editorField.setSelectedTextColor(UiTheme.INK);
+        editorField.setBorder(UiTheme.empty(0, 10, 0, 10));
+    }
+
+    void paintCellEditorField(JTextField editorField, Graphics graphics) {
+        Graphics2D graphics2D = (Graphics2D) graphics.create();
+        try {
+            graphics2D.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            int x = 2;
+            int y = 1;
+            int width = editorField.getWidth() - 4;
+            int height = editorField.getHeight() - 2;
+            graphics2D.setColor(EDITOR_BACKGROUND);
+            graphics2D.fillRoundRect(x, y, width, height, EDITOR_RADIUS, EDITOR_RADIUS);
+            graphics2D.setColor(EDITOR_BORDER);
+            graphics2D.drawRoundRect(x, y, width - 1, height - 1, EDITOR_RADIUS, EDITOR_RADIUS);
+        } finally {
+            graphics2D.dispose();
+        }
     }
 
     void modelColumnMenu(JPopupMenu menu) {
@@ -249,59 +273,6 @@ class TracksTableModeler {
         @Override
         public int getIconHeight() {
             return COLUMN_MENU_CHECK_SIZE;
-        }
-    }
-
-    private static class TrackCellEditor extends DefaultCellEditor {
-        private TrackCellEditor() {
-            super(new TrackCellEditorField());
-            setClickCountToStart(2);
-        }
-
-        @Override
-        public Component getTableCellEditorComponent(
-                JTable table,
-                Object value,
-                boolean selected,
-                int row,
-                int column) {
-            Component component = super.getTableCellEditorComponent(table, value, selected, row, column);
-            if (component instanceof TrackCellEditorField editorField) {
-                editorField.setText(value == null ? "" : value.toString());
-                editorField.selectAll();
-            }
-            return component;
-        }
-    }
-
-    private static class TrackCellEditorField extends JTextField {
-        private TrackCellEditorField() {
-            setOpaque(false);
-            setFont(UiTheme.BODY_FONT);
-            setForeground(UiTheme.INK);
-            setCaretColor(UiTheme.ACCENT_DARK);
-            setSelectionColor(UiTheme.SELECTION);
-            setSelectedTextColor(UiTheme.INK);
-            setBorder(UiTheme.empty(0, 10, 0, 10));
-        }
-
-        @Override
-        protected void paintComponent(Graphics graphics) {
-            Graphics2D graphics2D = (Graphics2D) graphics.create();
-            try {
-                graphics2D.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                int x = 2;
-                int y = 1;
-                int width = getWidth() - 4;
-                int height = getHeight() - 2;
-                graphics2D.setColor(EDITOR_BACKGROUND);
-                graphics2D.fillRoundRect(x, y, width, height, EDITOR_RADIUS, EDITOR_RADIUS);
-                graphics2D.setColor(EDITOR_BORDER);
-                graphics2D.drawRoundRect(x, y, width - 1, height - 1, EDITOR_RADIUS, EDITOR_RADIUS);
-            } finally {
-                graphics2D.dispose();
-            }
-            super.paintComponent(graphics);
         }
     }
 

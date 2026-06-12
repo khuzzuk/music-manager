@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -91,6 +92,22 @@ public class IndexService {
         reindexDirectory(directory, true);
     }
 
+    public void removeIndexedFiles(RootIndexItem root, Collection<Path> paths) throws IOException {
+        if (root == null || paths == null || paths.isEmpty()) {
+            return;
+        }
+
+        Set<Path> normalizedPaths = paths.stream()
+                .map(path -> path.toAbsolutePath().normalize())
+                .collect(Collectors.toSet());
+        if (!removeIndexedFilesFromTree(root, normalizedPaths)) {
+            return;
+        }
+
+        saveIndex(root);
+        notifyIndexListeners(root);
+    }
+
     private void reindexDirectory(IndexItem directory, boolean changesOnly) throws IOException {
         if (!directory.isDirectory()) {
             throw new IllegalArgumentException("Only directories can be reindexed.");
@@ -166,6 +183,19 @@ public class IndexService {
 
     private void notifyProgressListeners(IndexProgress progress) {
         progressListeners.forEach(listener -> listener.accept(progress));
+    }
+
+    private boolean removeIndexedFilesFromTree(IndexItem parent, Set<Path> paths) {
+        boolean removed = parent.getChildren().removeIf(child ->
+                child instanceof SoundFileIndexItem
+                        && child.getPath() != null
+                        && paths.contains(child.getPath().toAbsolutePath().normalize()));
+        for (IndexItem child : parent.getChildren()) {
+            if (child.hasChildren()) {
+                removed |= removeIndexedFilesFromTree(child, paths);
+            }
+        }
+        return removed;
     }
 
     private void mergeDirectory(IndexItem parent, Path path) {

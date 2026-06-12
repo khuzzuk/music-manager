@@ -1,5 +1,8 @@
 package pl.khuzzuk.ui;
 
+import pl.khuzzuk.index.IndexService;
+import pl.khuzzuk.index.RootIndexItem;
+import pl.khuzzuk.logging.ErrorReporter;
 import pl.khuzzuk.metadata.MetadataIndexWriterService;
 
 import javax.swing.JOptionPane;
@@ -12,10 +15,13 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 class TracksTableFileDeleter {
     private final Component parent;
     private final MetadataIndexWriterService metadataIndexWriterService;
+    private final IndexService indexService;
+    private final Supplier<RootIndexItem> rootSupplier;
     private final Consumer<Boolean> enabledConsumer;
     private final Runnable clearPreviewAction;
     private final Consumer<List<Path>> deletedRowsConsumer;
@@ -23,11 +29,15 @@ class TracksTableFileDeleter {
     TracksTableFileDeleter(
             Component parent,
             MetadataIndexWriterService metadataIndexWriterService,
+            IndexService indexService,
+            Supplier<RootIndexItem> rootSupplier,
             Consumer<Boolean> enabledConsumer,
             Runnable clearPreviewAction,
             Consumer<List<Path>> deletedRowsConsumer) {
         this.parent = parent;
         this.metadataIndexWriterService = metadataIndexWriterService;
+        this.indexService = indexService;
+        this.rootSupplier = rootSupplier;
         this.enabledConsumer = enabledConsumer;
         this.clearPreviewAction = clearPreviewAction;
         this.deletedRowsConsumer = deletedRowsConsumer;
@@ -50,7 +60,8 @@ class TracksTableFileDeleter {
                 }
 
                 deleteMetadata(deletedPaths);
-                return new DeleteResult(deletedPaths, failedPaths);
+                boolean indexUpdated = removeIndexedFiles(deletedPaths);
+                return new DeleteResult(deletedPaths, failedPaths, indexUpdated);
             }
 
             @Override
@@ -60,6 +71,7 @@ class TracksTableFileDeleter {
                     DeleteResult result = get();
                     clearPreviewAction.run();
                     deletedRowsConsumer.accept(result.deletedPaths());
+                    showIndexUpdateFailure(result);
                     showDeleteFailures(result.failedPaths());
                 } catch (Exception e) {
                     JOptionPane.showMessageDialog(
@@ -70,6 +82,20 @@ class TracksTableFileDeleter {
                 }
             }
         }.execute();
+    }
+
+    private boolean removeIndexedFiles(List<Path> deletedPaths) {
+        if (deletedPaths.isEmpty()) {
+            return true;
+        }
+
+        try {
+            indexService.removeIndexedFiles(rootSupplier.get(), deletedPaths);
+            return true;
+        } catch (IOException | SecurityException e) {
+            ErrorReporter.log("Cannot remove deleted files from directory index.", e);
+            return false;
+        }
     }
 
     private void deleteMetadata(List<Path> deletedPaths) {
@@ -100,6 +126,18 @@ class TracksTableFileDeleter {
                 JOptionPane.ERROR_MESSAGE);
     }
 
-    private record DeleteResult(List<Path> deletedPaths, List<Path> failedPaths) {
+    private void showIndexUpdateFailure(DeleteResult result) {
+        if (result.indexUpdated() || result.deletedPaths().isEmpty()) {
+            return;
+        }
+
+        JOptionPane.showMessageDialog(
+                parent,
+                "Pliki zostaly usuniete, ale nie udalo sie zaktualizowac indeksu katalogow.",
+                "Blad zapisu indeksu",
+                JOptionPane.ERROR_MESSAGE);
+    }
+
+    private record DeleteResult(List<Path> deletedPaths, List<Path> failedPaths, boolean indexUpdated) {
     }
 }

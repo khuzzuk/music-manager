@@ -25,6 +25,7 @@ import pl.khuzzuk.ui.MainWindow;
 
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -36,61 +37,88 @@ public class MusicManager {
     public static Context context;
 
     static void main() {
-        SwingUtilities.invokeLater(MusicManager::initComponents);
-        SwingUtilities.invokeLater(MusicManager::showMainWindow);
+        SwingUtilities.invokeLater(MusicManager::showLoadingScreenAndInitialize);
     }
 
-    private static void initComponents() {
+    private static void showLoadingScreenAndInitialize() {
         LoadingScreen loadingScreen = new LoadingScreen();
         loadingScreen.setVisible(true);
 
-        try {
-            SettingsService settingsService = new SettingsService(new SettingsToPropertiesMapper());
-            MoodConverter moodConverter = new MoodConverter();
-            SoundFileMetadataMapper soundFileMetadataMapper = new SoundFileMetadataMapper(moodConverter);
-            MetadataReaderService metadataReaderService = new MetadataReaderService(soundFileMetadataMapper);
-            MetadataFieldKeyMapper metadataFieldKeyMapper = new MetadataFieldKeyMapper();
-            MetadataWriterService metadataWriterService = new MetadataWriterService(metadataFieldKeyMapper);
-            DocumentMapper documentMapper = new DocumentMapper();
-            MetadataIndexReaderService metadataIndexReaderService =
-                    new MetadataIndexReaderService(METADATA_INDEX_PATH, documentMapper);
-            MetadataIndexWriterService metadataIndexWriterService =
-                    new MetadataIndexWriterService(METADATA_INDEX_PATH, documentMapper);
-            createIndexFileIfMissing();
-            IndexService indexService = new IndexService(
-                    INDEX_PATH,
-                    metadataReaderService,
-                    metadataIndexReaderService,
-                    metadataIndexWriterService);
-            IndexReaderService indexReaderService = new IndexReaderService(INDEX_PATH);
-            indexReaderService.read();
-            SavedPlaylistService savedPlaylistService =
-                    new SavedPlaylistService(PLAYLISTS_PATH, new SavedPlaylistMapper());
-            SoundPlayer soundPlayer = new SoundPlayerRouter(
-                    new MP3Player(),
-                    new FLACPlayer(),
-                    new WAVPlayer(),
-                    new OGGPlayer());
-            context = new Context(
-                    settingsService,
-                    metadataReaderService,
-                    metadataWriterService,
-                    metadataIndexReaderService,
-                    metadataIndexWriterService,
-                    indexService,
-                    indexReaderService,
-                    savedPlaylistService,
-                    soundPlayer);
-        } catch (IOException e) {
-            JOptionPane.showMessageDialog(
-                    loadingScreen,
-                    "Nie udalo sie zainicjalizowac aplikacji.\n" + e.getMessage(),
-                    "Blad inicjalizacji",
-                    JOptionPane.ERROR_MESSAGE);
-            System.exit(-1);
-        }
+        new SwingWorker<Context, Void>() {
+            @Override
+            protected Context doInBackground() throws IOException {
+                return initComponents();
+            }
 
-        loadingScreen.setVisible(false);
+            @Override
+            protected void done() {
+                try {
+                    context = get();
+                    loadingScreen.setVisible(false);
+                    loadingScreen.dispose();
+                    showMainWindow();
+                } catch (Exception e) {
+                    loadingScreen.setVisible(false);
+                    JOptionPane.showMessageDialog(
+                            loadingScreen,
+                            "Nie udalo sie zainicjalizowac aplikacji.\n" + userMessage(e),
+                            "Blad inicjalizacji",
+                            JOptionPane.ERROR_MESSAGE);
+                    loadingScreen.dispose();
+                    System.exit(-1);
+                }
+            }
+        }.execute();
+    }
+
+    private static Context initComponents() throws IOException {
+        SettingsService settingsService = new SettingsService(new SettingsToPropertiesMapper());
+        MoodConverter moodConverter = new MoodConverter();
+        SoundFileMetadataMapper soundFileMetadataMapper = new SoundFileMetadataMapper(moodConverter);
+        MetadataReaderService metadataReaderService = new MetadataReaderService(soundFileMetadataMapper);
+        MetadataFieldKeyMapper metadataFieldKeyMapper = new MetadataFieldKeyMapper();
+        MetadataWriterService metadataWriterService = new MetadataWriterService(metadataFieldKeyMapper);
+        DocumentMapper documentMapper = new DocumentMapper();
+        MetadataIndexReaderService metadataIndexReaderService =
+                new MetadataIndexReaderService(METADATA_INDEX_PATH, documentMapper);
+        MetadataIndexWriterService metadataIndexWriterService =
+                new MetadataIndexWriterService(METADATA_INDEX_PATH, documentMapper);
+        createIndexFileIfMissing();
+        IndexService indexService = new IndexService(
+                INDEX_PATH,
+                metadataReaderService,
+                metadataIndexReaderService,
+                metadataIndexWriterService);
+        IndexReaderService indexReaderService = new IndexReaderService(INDEX_PATH);
+        indexReaderService.read();
+        SavedPlaylistService savedPlaylistService =
+                new SavedPlaylistService(PLAYLISTS_PATH, new SavedPlaylistMapper());
+        SoundPlayer soundPlayer = new SoundPlayerRouter(
+                new MP3Player(),
+                new FLACPlayer(),
+                new WAVPlayer(),
+                new OGGPlayer());
+        return new Context(
+                settingsService,
+                metadataReaderService,
+                metadataWriterService,
+                metadataIndexReaderService,
+                metadataIndexWriterService,
+                indexService,
+                indexReaderService,
+                savedPlaylistService,
+                soundPlayer);
+    }
+
+    private static String userMessage(Exception exception) {
+        Throwable cause = exception.getCause();
+        if (cause != null && cause.getMessage() != null) {
+            return cause.getMessage();
+        }
+        if (exception.getMessage() != null) {
+            return exception.getMessage();
+        }
+        return exception.getClass().getSimpleName();
     }
 
     private static void showMainWindow() {

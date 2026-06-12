@@ -341,6 +341,31 @@ class IndexServiceTest {
     }
 
     @Test
+    void removeIndexedFilesRemovesFilesFromTreeAndPersistedIndexAndNotifiesListeners() throws IOException {
+        Path music = Files.createDirectory(tempDir.resolve("music"));
+        Path album = Files.createDirectory(music.resolve("album"));
+        Path deletedSong = Files.createFile(album.resolve("deleted.mp3"));
+        Path keptSong = Files.createFile(album.resolve("kept.mp3"));
+        Path indexPath = tempDir.resolve("index.dat");
+        RootIndexItem root = new RootIndexItem();
+        IndexService indexService = indexService(indexPath);
+        AtomicReference<RootIndexItem> notifiedRoot = new AtomicReference<>();
+        indexService.index(root, List.of(music));
+        indexService.addIndexListener(notifiedRoot::set);
+
+        indexService.removeIndexedFiles(root, List.of(deletedSong));
+
+        IndexItem albumItem = root.getChildren().getFirst().getChildren().getFirst();
+        assertEquals(List.of("kept.mp3"), albumItem.getChildren().stream()
+                .map(IndexItem::getName)
+                .toList());
+        String persistedIndex = Files.readString(indexPath);
+        assertFalse(persistedIndex.contains(escape(deletedSong.toAbsolutePath().normalize().toString())));
+        assertTrue(persistedIndex.contains(escape(keptSong.toAbsolutePath().normalize().toString())));
+        assertSame(root, notifiedRoot.get());
+    }
+
+    @Test
     void setsParentLinks() throws IOException {
         Path music = Files.createDirectory(tempDir.resolve("music"));
         Files.createFile(music.resolve("song.mp3"));

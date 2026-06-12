@@ -113,7 +113,9 @@ public class ContentPane extends JPanel {
         c.weightx = 1.0;
         c.weighty = 0.65;
         c.insets = modeler.fileTreeInsets();
-        fileBrowserPane.add(fileTree, c);
+        JScrollPane fileTreeScrollPane = new JScrollPane(fileTree);
+        modeler.modelScrollPane(fileTreeScrollPane);
+        fileBrowserPane.add(fileTreeScrollPane, c);
 
         c.gridy = 1;
         c.weighty = 0.35;

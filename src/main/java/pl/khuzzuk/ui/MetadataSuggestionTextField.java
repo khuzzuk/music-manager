@@ -27,7 +27,10 @@ class MetadataSuggestionTextField extends JTextField {
     private final DefaultListModel<String> suggestionsModel = new DefaultListModel<>();
     private final JList<String> suggestionsList = new JList<>(suggestionsModel);
     private final JPopupMenu suggestionsPopup = new JPopupMenu();
+    private final JScrollPane suggestionsScrollPane = new JScrollPane(suggestionsList);
     private final MetadataSuggestionTextFieldModeler modeler = new MetadataSuggestionTextFieldModeler();
+    private final Runnable enterFallback;
+    private final Runnable escapeFallback;
     private boolean applyingSuggestion;
     private SwingWorker<List<String>, Void> suggestionsWorker;
     private int suggestionsRequest;
@@ -37,9 +40,21 @@ class MetadataSuggestionTextField extends JTextField {
             int columns,
             Tag tag,
             MetadataIndexReaderService metadataIndexReaderService) {
+        this(text, columns, tag, metadataIndexReaderService, null, null);
+    }
+
+    MetadataSuggestionTextField(
+            String text,
+            int columns,
+            Tag tag,
+            MetadataIndexReaderService metadataIndexReaderService,
+            Runnable enterFallback,
+            Runnable escapeFallback) {
         super(text, columns);
         this.tag = tag;
         this.metadataIndexReaderService = metadataIndexReaderService;
+        this.enterFallback = enterFallback;
+        this.escapeFallback = escapeFallback;
         configureSuggestionsList();
         installSuggestionListeners();
         installSuggestionKeyBindings();
@@ -58,7 +73,8 @@ class MetadataSuggestionTextField extends JTextField {
         });
 
         modeler.modelSuggestionsPopup(suggestionsPopup);
-        suggestionsPopup.add(new JScrollPane(suggestionsList));
+        modeler.modelSuggestionsScrollPane(suggestionsScrollPane);
+        suggestionsPopup.add(suggestionsScrollPane);
     }
 
     private void installSuggestionListeners() {
@@ -104,7 +120,7 @@ class MetadataSuggestionTextField extends JTextField {
                 if (suggestionsPopup.isVisible()) {
                     applySelectedSuggestion();
                 } else {
-                    activateDefaultButton();
+                    activateEnterFallback();
                 }
             }
         });
@@ -113,9 +129,59 @@ class MetadataSuggestionTextField extends JTextField {
         getActionMap().put("hideSuggestions", new javax.swing.AbstractAction() {
             @Override
             public void actionPerformed(java.awt.event.ActionEvent event) {
-                hideSuggestions();
+                if (suggestionsPopup.isVisible()) {
+                    hideSuggestions();
+                    activateEscapeFallback();
+                } else {
+                    activateEscapeFallback();
+                }
             }
         });
+    }
+
+    @Override
+    protected boolean processKeyBinding(
+            KeyStroke keyStroke,
+            KeyEvent event,
+            int condition,
+            boolean pressed) {
+        if (pressed && handleSuggestionKey(event)) {
+            return true;
+        }
+
+        return super.processKeyBinding(keyStroke, event, condition, pressed);
+    }
+
+    private boolean handleSuggestionKey(KeyEvent event) {
+        if (event.getModifiersEx() != 0) {
+            return false;
+        }
+
+        if (event.getKeyCode() == KeyEvent.VK_DOWN) {
+            moveSelection(1);
+            return true;
+        }
+        if (event.getKeyCode() == KeyEvent.VK_UP) {
+            moveSelection(-1);
+            return true;
+        }
+        if (event.getKeyCode() == KeyEvent.VK_ENTER) {
+            if (suggestionsPopup.isVisible()) {
+                applySelectedSuggestion();
+            } else {
+                activateEnterFallback();
+            }
+            return true;
+        }
+        if (event.getKeyCode() == KeyEvent.VK_ESCAPE) {
+            if (suggestionsPopup.isVisible()) {
+                hideSuggestions();
+            }
+            activateEscapeFallback();
+            return true;
+        }
+
+        return false;
     }
 
     private void scheduleSuggestionsUpdate() {
@@ -178,7 +244,7 @@ class MetadataSuggestionTextField extends JTextField {
         }
 
         suggestionsList.setSelectedIndex(0);
-        modeler.modelSuggestionsSize(suggestionsList, suggestionsPopup, getWidth());
+        modeler.modelSuggestionsSize(suggestionsList, suggestionsScrollPane, suggestionsPopup, getWidth(), VISIBLE_ROWS);
         suggestionsPopup.show(this, 0, getHeight());
     }
 
@@ -221,10 +287,26 @@ class MetadataSuggestionTextField extends JTextField {
         suggestionsPopup.setVisible(false);
     }
 
-    private void activateDefaultButton() {
+    void closeSuggestions() {
+        cancelSuggestionsWorker();
+        hideSuggestions();
+    }
+
+    private void activateEnterFallback() {
+        if (enterFallback != null) {
+            enterFallback.run();
+            return;
+        }
+
         javax.swing.JRootPane rootPane = SwingUtilities.getRootPane(this);
         if (rootPane != null && rootPane.getDefaultButton() != null) {
             rootPane.getDefaultButton().doClick();
+        }
+    }
+
+    private void activateEscapeFallback() {
+        if (escapeFallback != null) {
+            escapeFallback.run();
         }
     }
 

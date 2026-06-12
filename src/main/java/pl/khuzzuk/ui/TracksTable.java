@@ -27,6 +27,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.event.RowSorterListener;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableColumnModel;
+import java.awt.Component;
 import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
@@ -48,6 +49,7 @@ public class TracksTable extends JTable {
     private static final String ADD_SELECTED_TO_PLAYLIST_ACTION = "addSelectedToPlaylist";
     private static final String EDIT_SELECTED_METADATA_ACTION = "editSelectedMetadata";
     private static final String DELETE_SELECTED_FILES_ACTION = "deleteSelectedFiles";
+    private static final String EDIT_FOCUSED_CELL_ACTION = "editFocusedCell";
     private final SettingsService settingsService;
     private final MetadataWriterService metadataWriterService;
     private final MetadataIndexReaderService metadataIndexReaderService;
@@ -97,6 +99,8 @@ public class TracksTable extends JTable {
         this.fileDeleter = new TracksTableFileDeleter(
                 this,
                 metadataIndexWriterService,
+                context.indexService(),
+                context.indexReaderService()::getCurrentRootIndexItem,
                 this::setEnabled,
                 this::clearRatingPreview,
                 this::removeDeletedRows);
@@ -109,11 +113,14 @@ public class TracksTable extends JTable {
         getTableHeader().addMouseListener(new HeaderMouseListener());
         setFocusTraversalKeysEnabled(false);
         modeler.modelTable(this);
+        setDefaultEditor(Object.class, new TracksTableCellEditor(metadataIndexReaderService, modeler));
+        setDefaultEditor(Integer.class, new TracksTableCellEditor(metadataIndexReaderService, modeler));
         RatingMouseListener ratingMouseListener = new RatingMouseListener();
         addMouseMotionListener(ratingMouseListener);
         addMouseListener(ratingMouseListener);
         addMouseListener(new TrackMouseListener());
         registerAddSelectedToPlaylistAction();
+        registerEditFocusedCellAction();
         registerEditSelectedMetadataAction();
         registerDeleteSelectedFilesAction();
         showMappedFiles(List.of());
@@ -282,6 +289,34 @@ public class TracksTable extends JTable {
             }
         };
         getActionMap().put(EDIT_SELECTED_METADATA_ACTION, action);
+    }
+
+    private void registerEditFocusedCellAction() {
+        getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_F2, 0), EDIT_FOCUSED_CELL_ACTION);
+        getInputMap(WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(
+                KeyStroke.getKeyStroke(KeyEvent.VK_F2, 0),
+                EDIT_FOCUSED_CELL_ACTION);
+        Action action = new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent event) {
+                editFocusedCell();
+            }
+        };
+        getActionMap().put(EDIT_FOCUSED_CELL_ACTION, action);
+    }
+
+    private void editFocusedCell() {
+        int row = getSelectedRow();
+        int column = getSelectedColumn();
+        if (row < 0 || column < 0 || !isCellEditable(row, column)) {
+            return;
+        }
+
+        editCellAt(row, column);
+        Component editor = getEditorComponent();
+        if (editor != null) {
+            editor.requestFocusInWindow();
+        }
     }
 
     private void registerDeleteSelectedFilesAction() {

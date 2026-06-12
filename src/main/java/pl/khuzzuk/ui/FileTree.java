@@ -93,6 +93,7 @@ public class FileTree extends JTree {
         setModel(new DefaultTreeModel(root));
         expandRow(0);
         restoreSelection(root, selectedItem);
+        notifySelectedFiles(getSelectionPath());
     }
 
     private void registerReindexSelectedDirectoryAction() {

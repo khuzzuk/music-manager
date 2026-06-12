@@ -39,8 +39,20 @@ public class RatingEditor extends JComponent {
     @Override
     protected void paintComponent(Graphics graphics) {
         super.paintComponent(graphics);
-        RatingIcon icon = new RatingIcon(previewRating >= 0 ? previewRating : rating);
+        RatingIcon icon = new RatingIcon(isEnabled() && previewRating >= 0 ? previewRating : rating);
         icon.paintIcon(this, graphics, PADDING, PADDING);
+    }
+
+    @Override
+    public void setEnabled(boolean enabled) {
+        boolean changed = isEnabled() != enabled;
+        super.setEnabled(enabled);
+        if (!enabled) {
+            previewRating = -1;
+        }
+        if (changed) {
+            repaint();
+        }
     }
 
     private void setRating(int rating) {
@@ -74,11 +86,18 @@ public class RatingEditor extends JComponent {
     private class MouseHandler extends MouseAdapter {
         @Override
         public void mouseMoved(MouseEvent event) {
+            if (!isEnabled()) {
+                clearPreviewRating();
+                return;
+            }
             setPreviewRating(ratingFromMouseX(event.getX()));
         }
 
         @Override
         public void mousePressed(MouseEvent event) {
+            if (!isEnabled()) {
+                return;
+            }
             requestFocusInWindow();
             setRating(ratingFromMouseX(event.getX()));
         }
@@ -111,6 +130,9 @@ public class RatingEditor extends JComponent {
     private class RatingKeyHandler extends KeyAdapter {
         @Override
         public void keyPressed(KeyEvent event) {
+            if (!isEnabled()) {
+                return;
+            }
             if (event.getKeyCode() == KeyEvent.VK_LEFT || event.getKeyCode() == KeyEvent.VK_DOWN) {
                 setRating(rating - 1);
             } else if (event.getKeyCode() == KeyEvent.VK_RIGHT || event.getKeyCode() == KeyEvent.VK_UP) {

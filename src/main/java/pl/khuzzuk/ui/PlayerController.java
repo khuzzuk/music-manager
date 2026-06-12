@@ -22,11 +22,23 @@ public class PlayerController {
     }
 
     public boolean playPause(Component parent) {
+        logState("playPause-before");
         if (playing) {
-            soundPlayer.pause();
-            playing = false;
-            paused = true;
+            pause();
+            logState("playPause-after");
             return false;
+        }
+
+        boolean result = play(parent);
+        logState("playPause-after");
+        return result;
+    }
+
+    public boolean play(Component parent) {
+        logState("play-before");
+        if (playing) {
+            logState("play-after-already-playing");
+            return true;
         }
 
         SoundFile currentSoundFile = playlistPane.getCurrentSoundFile();
@@ -43,10 +55,12 @@ public class PlayerController {
             }
             playing = true;
             paused = false;
+            logState("play-after");
             return true;
         } catch (IllegalArgumentException | IllegalStateException e) {
             playing = false;
             paused = false;
+            logState("play-after-error");
             JOptionPane.showMessageDialog(
                     parent,
                     "Nie udalo sie odtworzyc utworu.",
@@ -54,6 +68,19 @@ public class PlayerController {
                     JOptionPane.ERROR_MESSAGE);
             return false;
         }
+    }
+
+    public void pause() {
+        logState("pause-before");
+        if (!playing) {
+            logState("pause-after-not-playing");
+            return;
+        }
+
+        soundPlayer.pause();
+        playing = false;
+        paused = true;
+        logState("pause-after");
     }
 
     public int getCurrentPositionMillis() {
@@ -91,9 +118,11 @@ public class PlayerController {
     }
 
     public void stop() {
+        logState("stop-before");
         soundPlayer.stop();
         playing = false;
         paused = false;
+        logState("stop-after");
     }
 
     public void stopIfActiveSoundFile(Collection<Path> paths) {
@@ -137,5 +166,13 @@ public class PlayerController {
             paused = false;
             return false;
         }
+    }
+
+    private void logState(String action) {
+        String activePath = activeSoundFile == null ? "" : activeSoundFile.path();
+        System.out.println("[player-controller] action=" + action
+                + " playing=" + playing
+                + " paused=" + paused
+                + " active=" + activePath);
     }
 }

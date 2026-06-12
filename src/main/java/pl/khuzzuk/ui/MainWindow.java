@@ -15,6 +15,8 @@ import java.awt.BorderLayout;
 import java.awt.KeyboardFocusManager;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.util.List;
 
 public class MainWindow extends JFrame {
@@ -22,6 +24,7 @@ public class MainWindow extends JFrame {
     SettingsService settingsService;
     private final ContentPane contentPane;
     private final PlaylistPane playlistPane;
+    private final WindowsMediaKeyListener mediaKeyListener;
 
     public MainWindow(Context context) {
         super("Music Manager");
@@ -44,12 +47,25 @@ public class MainWindow extends JFrame {
         playerPaneContainer.add(playerPane, BorderLayout.CENTER);
         add(playerPaneContainer, BorderLayout.SOUTH);
         registerPlayPauseAction(playerPane);
+        mediaKeyListener = new WindowsMediaKeyListener(this, new PlayerPaneMediaKeyHandler(playerPane));
 
         MainMenuBar mainMenuBar = new MainMenuBar(context);
         setJMenuBar(mainMenuBar);
 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent event) {
+                mediaKeyListener.close();
+            }
+        });
         addWindowListener(new CloseAppListener(this, context));
+    }
+
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        mediaKeyListener.start();
     }
 
     Tag getLastTracksFilterTag() {
@@ -93,5 +109,37 @@ public class MainWindow extends JFrame {
                 playerPane.playPause();
             }
         });
+    }
+
+    private record PlayerPaneMediaKeyHandler(PlayerPane playerPane) implements WindowsMediaKeyListener.MediaKeyHandler {
+        @Override
+        public void play() {
+            playerPane.play();
+        }
+
+        @Override
+        public void pause() {
+            playerPane.pause();
+        }
+
+        @Override
+        public void playPause() {
+            playerPane.playPause();
+        }
+
+        @Override
+        public void stop() {
+            playerPane.stop();
+        }
+
+        @Override
+        public void playNext() {
+            playerPane.playNext();
+        }
+
+        @Override
+        public void playPrevious() {
+            playerPane.playPrevious();
+        }
     }
 }
